@@ -4,6 +4,12 @@ Esta carpeta contiene únicamente lo que hace falta para publicar la app:
 
 - `index.html` — la app completa (un solo archivo, sin dependencias locales; las
   librerías que usa se cargan desde CDN por internet).
+- `manifest.json` — le dice al navegador cómo se llama la app, de qué color es y
+  qué ícono usar al agregarla a la pantalla de inicio (Android/Chrome).
+- `icon-192.png`, `icon-512.png`, `icon-512-maskable.png`, `apple-touch-icon.png`
+  — el ícono de Maximax en los tamaños que pide cada sistema. `apple-touch-icon.png`
+  es aparte porque iOS/Safari no lee el `manifest.json` para esto — necesita su
+  propia etiqueta.
 - `.nojekyll` — le dice a GitHub Pages que sirva los archivos tal cual, sin pasarlos
   por su procesador Jekyll (no hace falta para que funcione, pero evita sorpresas).
 
@@ -21,8 +27,9 @@ GitHub Pro/Team/Enterprise; en uno público es gratis siempre).
 ### 2. Subir los archivos de esta carpeta
 
 **Opción A — desde el navegador (sin usar la terminal):**
-Entrá al repositorio → **Add file** → **Upload files** → arrastrá `index.html` y
-`.nojekyll` (los dos archivos de esta carpeta) → **Commit changes**.
+Entrá al repositorio → **Add file** → **Upload files** → arrastrá todos los
+archivos de esta carpeta (`index.html`, `manifest.json`, los 4 íconos `.png`, y
+`.nojekyll`) → **Commit changes**.
 
 > Si no ves el archivo `.nojekyll` en tu explorador de archivos es porque empieza
 > con un punto y tu sistema operativo lo esconde por default — activá "mostrar
@@ -79,6 +86,11 @@ GitHub Pages vuelve a publicar sola, en general en menos de un minuto.
 - **La cámara para escanear QR solo funciona por HTTPS** (o en `localhost`) — por
   eso abrir el `index.html` como archivo local a veces no deja usar la cámara,
   pero publicado en GitHub Pages (que siempre es HTTPS) sí funciona normalmente.
+- **El ícono al agregar la app a la pantalla de inicio** se ve una vez que la app
+  está publicada por HTTPS — no se ve igual si solo abrís el `index.html` como
+  archivo local. En Android/Chrome, el navegador puede ofrecer directamente
+  "Instalar app" o "Agregar a pantalla de inicio"; en iPhone/Safari es
+  **Compartir → Agregar a pantalla de inicio**.
 - Cada dispositivo guarda su propia identidad, inventario e historial en el
   propio navegador (`localStorage`) — no es un dato compartido entre quienes
   entran a la misma URL, cada quien tiene el suyo en su celular.

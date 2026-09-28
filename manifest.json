@@ -1,0 +1,16 @@
+{
+  "name": "Maximax — Ecosistema Agro-Comercial",
+  "short_name": "Maximax",
+  "description": "Intercambio de inventario, pedidos y entregas con código QR, sin necesidad de internet.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF8F3",
+  "theme_color": "#2F5233",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
