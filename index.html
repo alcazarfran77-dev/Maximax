@@ -1,0 +1,3613 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Maximax · QR</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M20 10 C19 6 21 3 25 2 C24 5 22 7 20 10 Z' fill='%233E7C4A'/%3E%3Cpath d='M20 10 C18 7 15 6 12 7 C14 9 17 10 20 10 Z' fill='%234d9457'/%3E%3Ccircle cx='20' cy='13.5' r='4.6' fill='%238a3f82'/%3E%3Ccircle cx='13.5' cy='17.5' r='4.6' fill='%236b2a63'/%3E%3Ccircle cx='26.5' cy='17.5' r='4.6' fill='%236b2a63'/%3E%3Ccircle cx='10.5' cy='25' r='4.4' fill='%234a1942'/%3E%3Ccircle cx='20' cy='24' r='5' fill='%237a3572'/%3E%3Ccircle cx='29.5' cy='25' r='4.4' fill='%234a1942'/%3E%3Ccircle cx='20' cy='32' r='4.4' fill='%234a1942'/%3E%3Ccircle cx='18' cy='12' r='1.1' fill='%23c084b8' opacity='0.65'/%3E%3Ccircle cx='11.5' cy='16' r='1' fill='%23c084b8' opacity='0.55'/%3E%3Ccircle cx='18' cy='22.5' r='1.1' fill='%23c084b8' opacity='0.55'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.2.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<!-- Respaldo para "Cargar imagen": html5-qrcode usa ZXing por dentro, que
+     puede fallar en detectar los patrones localizadores de un QR denso
+     con ciertos contenidos (verificado con pruebas propias). jsQR es más
+     tolerante en esos casos y se usa como segundo intento antes de avisar
+     que no se encontró ningún QR. -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+  :root{
+    --paper:#FAF8F3;
+    --ink:#2B2A26;
+    --green:#2F5233;
+    --green-dim:#3E7C4A;
+    --earth:#8B5E34;
+    --danger:#B23A2E;
+    --line:#DDD8CC;
+    --card:#FFFFFF;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-tap-highlight-color: transparent;}
+  body{padding-bottom:76px;min-height:100vh;}
+
+  header.topbar{
+    position:sticky; top:0; z-index:20;
+    background:var(--green); color:#fff;
+    padding:14px 16px 14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    background-image:
+      radial-gradient(rgba(255,255,255,.08) 1.5px, transparent 1.5px);
+    background-size: 10px 10px;
+    border-bottom: 3px solid var(--earth);
+  }
+  header.topbar .title-wrap{display:flex; align-items:center; gap:10px;}
+  header.topbar .mora-logo{width:28px; height:28px; flex-shrink:0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25));}
+  header.topbar .title{font-weight:700; font-size:16px; letter-spacing:.02em;}
+  header.topbar .title small{display:block; font-weight:400; font-size:11px; opacity:.85; letter-spacing:.03em;}
+  .pill{
+    font-family:var(--mono); font-size:11px; padding:5px 10px; border-radius:20px;
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
+    background:rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.25);
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:#E85C4A;}
+  .pill.online .dot{background:#7FD858;}
+
+  main{padding:16px; max-width:640px; margin:0 auto;}
+  section.tab{display:none;}
+  section.tab.active{display:block;}
+
+  h2.section-title{font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--earth);
+    margin:0 0 10px 0; font-weight:700;}
+  p.hint{font-size:13px; color:#6b6558; line-height:1.5; margin:0 0 16px 0;}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px;}
+  .card + .card{margin-top:0;}
+
+  label{display:block; font-size:12px; font-weight:600; color:#55503f; margin:12px 0 5px 0;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px;
+    font-size:15px; font-family:var(--sans); background:#fff; color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{outline:2px solid var(--green-dim); outline-offset:1px;}
+  input.input-readonly{background:#F3F0E8; color:#6b6558; cursor:not-allowed;}
+  .row{display:flex; gap:10px;}
+  .row > *{flex:1;}
+
+  button{
+    font-family:var(--sans); font-weight:600; font-size:14px; border:none; border-radius:8px;
+    padding:12px 16px; cursor:pointer; transition:transform .05s ease;
+  }
+  button:active{transform:scale(.98);}
+  button.primary{background:var(--green); color:#fff; width:100%;}
+  button.secondary{background:#fff; color:var(--green); border:1.5px solid var(--green);}
+  button.ghost{background:transparent; color:#6b6558; border:1px solid var(--line);}
+  button.danger{background:#fff; color:var(--danger); border:1.5px solid var(--danger);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  button.small{padding:7px 12px; font-size:12.5px;}
+
+  .btnrow{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+
+  .badge{display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:700;
+    padding:3px 8px; border-radius:5px; letter-spacing:.03em;}
+  .badge.INV{background:#E4EEDD; color:var(--green);}
+  .badge.OC{background:#F0E4D4; color:var(--earth);}
+  .badge.CE{background:#DCEAF0; color:#2A6478;}
+  .badge.CR{background:#E4D9F0; color:#5B3A9E;}
+
+  .msg{border-radius:8px; padding:11px 13px; font-size:13.5px; margin-top:12px; line-height:1.45;}
+  .msg.ok{background:#E4F3E6; color:#1F5B2A; border:1px solid #B9DEC0;}
+  .msg.err{background:#FBEAE7; color:#8C2A20; border:1px solid #F0BFB6;}
+  .msg.warn{background:#FBF3DC; color:#7A5B0A; border:1px solid #EEDA9E;}
+  .msg.info{background:#EAF1F7; color:#2A4F6B; border:1px solid #C6DBEA;}
+
+  .qrgrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(130px,150px)); gap:10px; margin-top:14px; justify-content:start;}
+  .qrcard{border:1px solid var(--line); border-radius:8px; padding:6px; text-align:center; background:#fff;
+    max-width:150px; margin:0 auto;}
+  .qrcard img{width:100%; height:auto; image-rendering:pixelated; border-radius:4px;}
+  .qrcard canvas{width:100%; height:auto; image-rendering:pixelated; border-radius:4px; display:block;}
+  .qrcard .lbl{font-family:var(--mono); font-size:10px; color:#6b6558; margin-top:6px;}
+  .qrcard a{display:block; font-size:11px; margin-top:6px; color:var(--green); text-decoration:none; font-weight:600;}
+
+  #reader{width:100%; border-radius:8px; overflow:hidden; border:1px solid var(--line);}
+  #reader video{border-radius:8px;}
+
+  .status-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px;}
+  .status-dot.pend{background:#E0A030;}
+  .status-dot.sync{background:#3E7C4A;}
+
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:#fff; border-top:1px solid var(--line);
+    display:flex; padding:6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;
+  }
+  nav.tabbar button{
+    flex:1; background:none; border:none; padding:8px 2px; font-size:11px; font-weight:600;
+    color:#9a9385; display:flex; flex-direction:column; align-items:center; gap:3px; border-radius:8px;
+  }
+  nav.tabbar button.active{color:var(--green); background:#EEF3EA;}
+  nav.tabbar button svg{width:20px; height:20px;}
+
+  /* --- Sub-pestañas dentro de una pestaña (Panel) --- */
+  .subtabbar{display:flex; gap:6px; margin:14px 0 16px 0; border-bottom:1px solid var(--line);}
+  .subtab-btn{background:none; border:none; border-bottom:2px solid transparent; padding:9px 4px;
+    font-size:13.5px; font-weight:600; color:#9a9385;}
+  .subtab-btn.active{color:var(--green); border-bottom-color:var(--green);}
+  .subtab-content{display:none;}
+  .subtab-content.active{display:block;}
+
+  details.raw{margin-top:10px;}
+  details.raw summary{font-size:11.5px; color:#8a8474; cursor:pointer;}
+  details.raw pre{white-space:pre-wrap; word-break:break-all; font-family:var(--mono); font-size:10px;
+    background:#F3F0E8; padding:8px; border-radius:6px; max-height:160px; overflow:auto; margin-top:6px;}
+
+  .kv{font-size:13px; line-height:1.7;}
+  .kv b{color:#55503f;}
+  .muted{color:#9a9385;}
+
+  /* --- Picker de catálogo SNIIM --- */
+  .catalogo-wrap{margin-top:4px;}
+  .catalogo-buscar{position:sticky; top:56px; z-index:10; background:var(--card);
+    padding:8px 0 8px 0; margin-bottom:4px;}
+  .catalogo-buscar input{width:100%;}
+  .catalogo-buscar-msg{font-size:11.5px; color:var(--green-dim); margin-top:5px; min-height:14px; font-weight:600;}
+  .catalogo-seleccion{font-size:13.5px; padding:9px 11px; border:1px dashed var(--line);
+    border-radius:7px; background:#FBF9F4; margin-bottom:10px;}
+  .catalogo-seleccion .muted{color:#9a9385;}
+  .catalogo-listas{max-height:360px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:4px 8px;}
+  .catalogo-grupo{padding:8px 2px; border-bottom:1px solid #EFEBE0; transition:background-color .6s ease;}
+  .catalogo-grupo:last-child{border-bottom:none;}
+  .catalogo-grupo.jump-highlight{background-color:#FBF3DC;}
+  .catalogo-grupo-titulo{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--earth); margin-bottom:6px;}
+  .catalogo-items{display:flex; flex-direction:column; gap:4px;}
+  .catalogo-item{display:flex; align-items:center; gap:8px; text-align:left; width:100%;
+    background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:13.5px;
+    font-family:var(--sans); color:var(--ink); cursor:pointer;}
+  .catalogo-item:active{transform:scale(.99);}
+  .catalogo-item.selected{border-color:var(--green); background:#EEF6EF;}
+  .catalogo-item-codigo{font-family:var(--mono); font-size:10.5px; font-weight:700; color:var(--green-dim);
+    background:#E4EEDD; padding:2px 6px; border-radius:4px; flex-shrink:0;}
+  .catalogo-item-guardado{margin-left:auto; color:var(--green-dim); font-size:14px;}
+  .catalogo-item.has-saved{border-left:3px solid var(--green-dim);}
+
+  /* --- Sugerencias de referencia (OC/CE) --- */
+  .ref-sugerida-list{display:flex; flex-direction:column; gap:6px; margin-top:8px;}
+  button.ref-sugerida{display:flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--line);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; text-align:left; color:var(--ink);}
+  button.ref-sugerida.chosen{border-color:var(--green); background:#EEF6EF;}
+  button.ref-sugerida .mono{font-family:var(--mono); font-weight:700;}
+
+  /* --- Mi inventario guardado --- */
+  .inv-item{display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px 4px; border-bottom:1px solid #EFEBE0;}
+  .inv-item:last-child{border-bottom:none;}
+  .inv-item-info{font-size:13px; line-height:1.5;}
+  .inv-item-info .nombre{font-weight:700;}
+  .inv-item-info .detalle{color:#6b6558; font-size:12px;}
+  .inv-item-acciones{display:flex; gap:6px; flex-shrink:0;}
+
+  /* --- Roles (checkbox múltiple, un solo ID) --- */
+  .roles-check-group{display:flex; flex-wrap:wrap; gap:8px;}
+  label.rol-check{display:flex; align-items:center; gap:6px; border:1px solid var(--line);
+    border-radius:20px; padding:8px 14px; font-size:13.5px; font-weight:600; color:var(--ink);
+    background:#fff; cursor:pointer;}
+  label.rol-check:has(input:checked){border-color:var(--green); background:#EEF6EF; color:var(--green);}
+  label.rol-check.checked{border-color:var(--green); background:#EEF6EF; color:var(--green);}
+  label.rol-check input{accent-color:var(--green);}
+  .inv-item-activo{background:#F7FBF5; border-radius:8px; padding-left:6px; padding-right:6px;}
+  .inv-item-activo-tag{font-family:var(--mono); font-size:9.5px; font-weight:700; color:var(--green-dim);
+    background:#E4EEDD; padding:2px 6px; border-radius:4px; margin-left:6px;}
+
+  /* --- Modal de confirmación (guardar/descartar al cambiar de producto) --- */
+  .modal-overlay{display:none; position:fixed; inset:0; z-index:100; background:rgba(30,28,22,.55);
+    align-items:center; justify-content:center; padding:20px;}
+  .modal-box{background:#fff; border-radius:12px; padding:20px; max-width:380px; width:100%;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);}
+  .modal-box p{font-size:14px; line-height:1.5; margin:0; color:var(--ink);}
+  .modal-box .btnrow button{flex:1;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="title-wrap">
+    <svg class="mora-logo" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M20 10 C19 6 21 3 25 2 C24 5 22 7 20 10 Z" fill="#3E7C4A"/>
+      <path d="M20 10 C18 7 15 6 12 7 C14 9 17 10 20 10 Z" fill="#4d9457"/>
+      <circle cx="20" cy="13.5" r="4.6" fill="#8a3f82"/>
+      <circle cx="13.5" cy="17.5" r="4.6" fill="#6b2a63"/>
+      <circle cx="26.5" cy="17.5" r="4.6" fill="#6b2a63"/>
+      <circle cx="10.5" cy="25" r="4.4" fill="#4a1942"/>
+      <circle cx="20" cy="24" r="5" fill="#7a3572"/>
+      <circle cx="29.5" cy="25" r="4.4" fill="#4a1942"/>
+      <circle cx="20" cy="32" r="4.4" fill="#4a1942"/>
+      <circle cx="18" cy="12" r="1.1" fill="#c084b8" opacity="0.65"/>
+      <circle cx="11.5" cy="16" r="1" fill="#c084b8" opacity="0.55"/>
+      <circle cx="18" cy="22.5" r="1.1" fill="#c084b8" opacity="0.55"/>
+    </svg>
+    <div class="title">MAXIMAX · QR<small>Prototipo offline-first</small></div>
+  </div>
+  <div class="pill" id="connPill"><span class="dot"></span><span id="connText">sin conexión</span></div>
+</header>
+
+<main>
+
+  <!-- ============ TAB: IDENTIDAD ============ -->
+  <section class="tab active" data-tab="identidad">
+    <h2 class="section-title">Identidad de este dispositivo</h2>
+    <p class="hint">Un solo identificador por dispositivo, con uno o más roles — ya no hace falta un ID
+      distinto para cada rol. En producción, la llave de firma se distribuye una sola vez durante el
+      registro (con conexión); aquí, para poder probar de extremo a extremo, se deriva del mismo
+      identificador con la fórmula <code>SHA-256("maximax-seed-" + id)</code> — idéntica a la del
+      prototipo en Python, así que un QR generado por <code>demo.py</code> se puede escanear y verificar
+      aquí, y viceversa.</p>
+    <div id="msgPersistencia"></div>
+    <div class="card">
+      <label for="miActorId">Tu identificador</label>
+      <div class="row">
+        <input type="text" id="miActorId" placeholder="p. ej. productor_uruapan_017" autocapitalize="off" autocorrect="off">
+        <button type="button" class="ghost small" id="btnModificarId" style="flex:0 0 auto; display:none;">Modificar ID</button>
+      </div>
+      <div id="msgReconocido"></div>
+      <label for="nombrePersona">Nombre</label>
+      <input type="text" id="nombrePersona" placeholder="Tu nombre" autocapitalize="words">
+      <label for="ciudadPersona">Ciudad</label>
+      <input type="text" id="ciudadPersona" placeholder="p. ej. Uruapan, Michoacán">
+      <label>Rol (podés elegir más de uno)</label>
+      <div class="roles-check-group">
+        <label class="rol-check"><input type="checkbox" class="rol-checkbox" value="productor"> Productor</label>
+        <label class="rol-check"><input type="checkbox" class="rol-checkbox" value="comprador"> Comprador</label>
+        <label class="rol-check"><input type="checkbox" class="rol-checkbox" value="transportista"> Transportista</label>
+      </div>
+      <div class="btnrow">
+        <button class="primary" id="btnGuardarIdentidad">Guardar identidad</button>
+      </div>
+      <div id="msgIdentidad"></div>
+    </div>
+    <div class="card" id="cardIdentidadActual" style="display:none;">
+      <h2 class="section-title" style="margin-bottom:6px;">Tu identidad</h2>
+      <div class="kv"><b>ID:</b> <span id="idActualTexto" class="mono" style="font-family:var(--mono)"></span></div>
+      <div class="kv"><b>Nombre:</b> <span id="nombreActualTexto"></span></div>
+      <div class="kv"><b>Ciudad:</b> <span id="ciudadActualTexto"></span></div>
+      <div class="kv"><b>Roles:</b> <span id="rolActualTexto"></span></div>
+    </div>
+    <div class="card" id="cardInventarioIdentidad" style="display:none;">
+      <h2 class="section-title" style="margin-bottom:6px;">Tu inventario ya capturado</h2>
+      <p class="hint" style="margin-bottom:10px;">Esto es lo que ya tenías guardado en INV — Inventario
+        antes de volver a identificarte.</p>
+      <div class="btnrow" style="margin-top:0;"><button type="button" class="ghost small btn-compartir-inventario">📤 Compartir inventario</button></div>
+      <div id="inventarioIdentidadLista"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: GENERAR ============ -->
+  <section class="tab" data-tab="generar">
+    <h2 class="section-title">Generar paquete QR</h2>
+    <p class="hint">Construye, firma y codifica un paquete INV / OC / CE. Se genera 100% en este dispositivo,
+      sin ninguna llamada de red. Para INV, el producto se elige de las listas precargadas del catálogo
+      SNIIM — todas quedan siempre a la vista; el buscador solo te lleva a la lista o producto que coincide.
+      Cada QR-INV que generás incluye <b>todos</b> los productos guardados en "Mi inventario", no solo el
+      que tenés en pantalla — es un inventario completo en un solo paquete firmado.</p>
+    <div class="card">
+      <label for="tipoPaquete">Tipo de paquete</label>
+      <select id="tipoPaquete">
+        <option value="INV">INV — Inventario</option>
+        <option value="OC">OC — Orden de compra</option>
+        <option value="CE">CE — Confirmación de entrega</option>
+        <option value="CR">CR — Confirmación de recepción</option>
+      </select>
+      <div id="camposFormulario"></div>
+      <div class="btnrow">
+        <button class="primary" id="btnGenerar">Firmar y generar QR</button>
+      </div>
+      <div id="msgGenerar"></div>
+    </div>
+    <div class="card" id="miInventarioCard" style="display:none;">
+      <h2 class="section-title" style="margin-bottom:6px;">Mi inventario guardado</h2>
+      <p class="hint" style="margin-bottom:10px;">Se actualiza cada vez que generás un QR-INV, y el QR
+        siempre incluye todo lo que está en esta lista (pueden ser varios productos a la vez). Elegí
+        "Editar" para cargar los datos guardados de un producto y modificarlos.</p>
+      <div class="btnrow" style="margin-top:0;"><button type="button" class="ghost small btn-compartir-inventario">📤 Compartir inventario</button></div>
+      <div id="miInventarioLista"></div>
+    </div>
+    <div class="card" id="miOrdenCard" style="display:none;">
+      <h2 class="section-title" style="margin-bottom:6px;">Mi orden de compra</h2>
+      <p class="hint" style="margin-bottom:10px;">Elegí productos del catálogo, uno a la vez, con la
+        cantidad y el precio acordados — el QR-OC que generés va a incluir todos los que estén en esta
+        lista. Elegí "Editar" para modificar alguno.</p>
+      <div id="miOrdenLista"></div>
+    </div>
+    <div id="resultadoQr"></div>
+  </section>
+
+  <!-- ============ TAB: ESCANEAR ============ -->
+  <section class="tab" data-tab="escanear">
+    <h2 class="section-title">Escanear QR</h2>
+    <p class="hint">Con cámara en vivo, o cargando una foto/captura del código. Si el paquete viene
+      fragmentado en varios QR, se pueden escanear en cualquier orden.</p>
+
+    <div class="card">
+      <h2 class="section-title" style="margin-bottom:6px;">Guía rápida — 3 pasos</h2>
+      <details class="raw">
+        <summary>1. Escanear Inventario (para armar una orden de compra)</summary>
+        <ol style="margin:8px 0 4px 20px; padding:0;">
+          <li>Escaneá el QR-INV que te compartió el productor.</li>
+          <li>Elegí cuánto necesitás de cada producto — el total se calcula solo.</li>
+          <li>Tocá "Generar orden de compra (OC)" y compartísela al productor.</li>
+        </ol>
+      </details>
+      <details class="raw">
+        <summary>2. Escanear Orden de Compra (para confirmar una entrega)</summary>
+        <ol style="margin:8px 0 4px 20px; padding:0;">
+          <li>Escaneá el QR-OC que te envía el comprador.</li>
+          <li>Revisá las coincidencias y diferencias contra tu inventario.</li>
+          <li>Generá la confirmación de entrega (CE) y confirmala en Panel → CE pendientes.</li>
+        </ol>
+      </details>
+      <details class="raw">
+        <summary>3. Escanear Confirmación de Entrega (para recibir en tu inventario)</summary>
+        <ol style="margin:8px 0 4px 20px; padding:0;">
+          <li>Escaneá el QR-CE que te entrega el productor o transportista.</li>
+          <li>Ajustá la cantidad si recibiste menos de lo que dice la CE.</li>
+          <li>Tocá "Generar confirmación de recepción (CR)" — se suma sola a tu inventario.</li>
+        </ol>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="btnrow" style="margin-top:0;">
+        <button class="secondary" id="btnIniciarCamara">📷 Iniciar cámara</button>
+        <button class="ghost" id="btnDetenerCamara" disabled>Detener</button>
+      </div>
+      <div id="reader" style="margin-top:12px; display:none;"></div>
+
+      <label for="inputImagenQr" style="margin-top:16px;">O cargar una imagen</label>
+      <input type="file" id="inputImagenQr" accept="image/*">
+
+      <div id="estadoFragmentos"></div>
+      <div id="msgEscaneo"></div>
+      <div class="btnrow">
+        <button class="ghost small" id="btnLimpiarEscaneo">Limpiar escaneo en curso</button>
+      </div>
+    </div>
+
+    <div id="ultimoRecibido"></div>
+  </section>
+
+  <!-- ============ TAB: PANEL ============ -->
+  <section class="tab" data-tab="panel">
+    <h2 class="section-title">Panel</h2>
+    <p class="hint">Vista rápida de tu inventario y de lo que todavía tenés pendiente — órdenes de
+      compra sin confirmación de entrega generada, y confirmaciones de entrega sin aplicar a tu
+      inventario.</p>
+    <div class="subtabbar">
+      <button type="button" class="subtab-btn active" data-subtab="PanelInventario">Inventario</button>
+      <button type="button" class="subtab-btn" data-subtab="PanelOC">OC pendientes</button>
+      <button type="button" class="subtab-btn" data-subtab="PanelCE">CE pendientes</button>
+      <button type="button" class="subtab-btn" data-subtab="PanelCR">CR pendientes</button>
+    </div>
+    <div class="subtab-content active" id="subtabPanelInventario"></div>
+    <div class="subtab-content" id="subtabPanelOC"></div>
+    <div class="subtab-content" id="subtabPanelCE"></div>
+    <div class="subtab-content" id="subtabPanelCR"></div>
+  </section>
+
+  <!-- ============ TAB: HISTÓRICO ============ -->
+  <section class="tab" data-tab="historico">
+    <h2 class="section-title">Histórico</h2>
+    <p class="hint">Paquetes recibidos o generados en este dispositivo, del más reciente al más
+      antiguo. Se guarda acá — sigue ahí aunque recargués la página o cerrés el navegador. La
+      sincronización con la nube de Maximax ya no es manual: pasa sola al abrir la app y al cerrarla.</p>
+    <div class="card">
+      <div id="resumenHistorico" class="kv"></div>
+      <div class="btnrow">
+        <button class="ghost small" id="btnVaciarHistorico">Vaciar historial</button>
+      </div>
+      <div id="msgHistorico"></div>
+    </div>
+    <div id="listaHistorico"></div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button data-tab="identidad" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+    Identidad
+  </button>
+  <button data-tab="generar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z"/></svg>
+    Generar
+  </button>
+  <button data-tab="escanear">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="M4 12h16"/></svg>
+    Escanear
+  </button>
+  <button data-tab="panel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/></svg>
+    Panel <span id="panelBadgeNum" style="font-family:var(--mono);"></span>
+  </button>
+  <button data-tab="historico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    Histórico
+  </button>
+</nav>
+
+<div class="modal-overlay" id="modalConfirm">
+  <div class="modal-box">
+    <p id="modalConfirmText"></p>
+    <div class="btnrow" style="margin-top:16px;">
+      <button type="button" class="danger" id="modalConfirmDescartar">Descartar y continuar</button>
+      <button type="button" class="secondary" id="modalConfirmSeguir">Seguir editando</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   NÚCLEO Maximax (idéntico en lógica al validado en Node con los
+   paquetes reales de demo.py — ver web/test_core.js del prototipo).
+===================================================================== */
+const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+const CHUNK_PREFIX = "AF";
+const CAPACIDAD_QR_CHARS = 900;
+
+function base45Encode(bytes) {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 2) {
+    if (i + 1 < bytes.length) {
+      let n = bytes[i] * 256 + bytes[i + 1];
+      const c = n % 45; n = (n - c) / 45;
+      const d = n % 45; n = (n - d) / 45;
+      const e = n;
+      out += ALPHABET[c] + ALPHABET[d] + ALPHABET[e];
+    } else {
+      let n = bytes[i];
+      const c = n % 45; n = (n - c) / 45;
+      const d = n;
+      out += ALPHABET[c] + ALPHABET[d];
+    }
+  }
+  return out;
+}
+function base45Decode(str) {
+  const vals = [...str].map((c) => {
+    const idx = ALPHABET.indexOf(c);
+    if (idx === -1) throw new Error("Carácter fuera del alfabeto Base45: " + c);
+    return idx;
+  });
+  const out = [];
+  let i = 0;
+  while (i < vals.length) {
+    if (vals.length - i >= 3) {
+      const n = vals[i] + vals[i + 1] * 45 + vals[i + 2] * 45 * 45;
+      out.push((n >> 8) & 0xff, n & 0xff);
+      i += 3;
+    } else if (vals.length - i === 2) {
+      const n = vals[i] + vals[i + 1] * 45;
+      out.push(n & 0xff);
+      i += 2;
+    } else {
+      throw new Error("Longitud Base45 inválida");
+    }
+  }
+  return new Uint8Array(out);
+}
+function canonicalizeFromText(text) {
+  let i = 0; const n = text.length;
+  const skipWs = () => { while (i < n && /\s/.test(text[i])) i++; };
+  function parseStringRaw() {
+    const start = i; i++;
+    while (text[i] !== '"') { if (text[i] === "\\") i += 2; else i++; }
+    i++; return text.slice(start, i);
+  }
+  function parseNumberRaw() {
+    const start = i;
+    if (text[i] === "-") i++;
+    while (i < n && /[0-9]/.test(text[i])) i++;
+    if (text[i] === ".") { i++; while (i < n && /[0-9]/.test(text[i])) i++; }
+    if (text[i] === "e" || text[i] === "E") {
+      i++; if (text[i] === "+" || text[i] === "-") i++;
+      while (i < n && /[0-9]/.test(text[i])) i++;
+    }
+    return text.slice(start, i);
+  }
+  function parseValue() {
+    skipWs(); const c = text[i];
+    if (c === "{") return parseObject();
+    if (c === "[") return parseArray();
+    if (c === '"') return { s: parseStringRaw() };
+    if (text.startsWith("true", i)) { i += 4; return { lit: "true" }; }
+    if (text.startsWith("false", i)) { i += 5; return { lit: "false" }; }
+    if (text.startsWith("null", i)) { i += 4; return { lit: "null" }; }
+    return { num: parseNumberRaw() };
+  }
+  function parseObject() {
+    i++; skipWs(); const entries = [];
+    if (text[i] === "}") { i++; return { obj: entries }; }
+    while (true) {
+      skipWs(); const key = parseStringRaw(); skipWs(); i++;
+      const val = parseValue(); entries.push([key, val]); skipWs();
+      if (text[i] === ",") { i++; continue; }
+      if (text[i] === "}") { i++; break; }
+    }
+    return { obj: entries };
+  }
+  function parseArray() {
+    i++; skipWs(); const items = [];
+    if (text[i] === "]") { i++; return { arr: items }; }
+    while (true) {
+      items.push(parseValue()); skipWs();
+      if (text[i] === ",") { i++; continue; }
+      if (text[i] === "]") { i++; break; }
+    }
+    return { arr: items };
+  }
+  function serialize(node) {
+    if ("s" in node) return node.s;
+    if ("num" in node) return node.num;
+    if ("lit" in node) return node.lit;
+    if ("arr" in node) return "[" + node.arr.map(serialize).join(",") + "]";
+    if ("obj" in node) {
+      const sorted = [...node.obj].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      return "{" + sorted.map(([k, v]) => k + ":" + serialize(v)).join(",") + "}";
+    }
+    throw new Error("Nodo JSON desconocido");
+  }
+  return serialize(parseValue());
+}
+function canonicalStringify(obj) {
+  if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
+  if (Array.isArray(obj)) return "[" + obj.map(canonicalStringify).join(",") + "]";
+  const keys = Object.keys(obj).sort();
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
+}
+async function derivarLlave(actorId) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("maximax-seed-" + actorId));
+  return crypto.subtle.importKey("raw", digest, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+async function firmarHex(cryptoKey, mensajeTexto) {
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(mensajeTexto));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function verificarHex(cryptoKey, mensajeTexto, firmaHex) {
+  if (!firmaHex || firmaHex.length % 2 !== 0) return false;
+  const sigBytes = new Uint8Array(firmaHex.match(/.{2}/g).map((h) => parseInt(h, 16)));
+  return crypto.subtle.verify("HMAC", cryptoKey, sigBytes, new TextEncoder().encode(mensajeTexto));
+}
+function codificarTransporte(jsonTextoCanonico) {
+  const comprimido = pako.gzip(jsonTextoCanonico, { level: 9 });
+  return base45Encode(comprimido);
+}
+function decodificarTransporte(base45Texto) {
+  const comprimido = base45Decode(base45Texto);
+  const bytes = pako.ungzip(comprimido);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+function fragmentar(texto, capacidad = CAPACIDAD_QR_CHARS) {
+  if (texto.length <= capacidad) return [`${CHUNK_PREFIX}|1/1|${texto}`];
+  const partes = [];
+  for (let i = 0; i < texto.length; i += capacidad) partes.push(texto.slice(i, i + capacidad));
+  return partes.map((p, idx) => `${CHUNK_PREFIX}|${idx + 1}/${partes.length}|${p}`);
+}
+class Reensamblador {
+  constructor() { this.partes = new Map(); this.total = null; }
+  agregar(contenidoQr) {
+    const m = contenidoQr.match(/^AF\|(\d+)\/(\d+)\|([\s\S]*)$/);
+    if (!m) throw new Error("Este código no tiene el formato de paquete Maximax (¿es un QR de otra app?)");
+    const idx = parseInt(m[1], 10), total = parseInt(m[2], 10);
+    if (this.total === null) this.total = total;
+    else if (this.total !== total) throw new Error("Fragmentos de dos paquetes distintos mezclados — limpiá el escaneo en curso.");
+    this.partes.set(idx, m[3]);
+  }
+  get completo() { return this.total !== null && this.partes.size === this.total; }
+  faltantes() {
+    if (this.total === null) return [];
+    const f = []; for (let k = 1; k <= this.total; k++) if (!this.partes.has(k)) f.push(k);
+    return f;
+  }
+  textoCompleto() {
+    let s = ""; for (let k = 1; k <= this.total; k++) s += this.partes.get(k);
+    return s;
+  }
+  reset() { this.partes.clear(); this.total = null; }
+}
+
+function nuevoId() {
+  const b = crypto.getRandomValues(new Uint8Array(4));
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+function nuevoNonce() {
+  const b = crypto.getRandomValues(new Uint8Array(6));
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/* =====================================================================
+   CATÁLOGO SNIIM — listas precargadas de productos, agrupadas por
+   Producto_Base (los Producto_Base con un solo producto se agrupan en
+   "Otros"). Generado desde SNIIM_catalogo_variantes_productos_2026.xlsx;
+   ID_SNIIM = 3 primeras letras del Producto_Base + consecutivo (hasta
+   999), con contador compartido por prefijo para evitar colisiones
+   entre bases distintas que comparten las mismas 3 letras (p. ej.
+   Calabacita/Calabaza -> ambas "CAL").
+===================================================================== */
+const CATALOGO_SNIIM = [{"nombre":"Aguacate","productos":[["AGU-001","Aguacate Criollo"],["AGU-002","Aguacate Fuerte"],["AGU-003","Aguacate Hass"],["AGU-004","Aguacate Hass adelantado"],["AGU-005","Aguacate Hass flor vieja"],["AGU-006","Aguacate Pagua"]]},{"nombre":"Ajo","productos":[["AJO-001","Ajo Blanco"],["AJO-002","Ajo Blanco # 8"],["AJO-003","Ajo Morado"]]},{"nombre":"Calabacita","productos":[["CAL-001","Calabacita Criolla"],["CAL-002","Calabacita Italiana"],["CAL-003","Calabacita regional"]]},{"nombre":"Cebolla","productos":[["CEB-001","Cebolla Bola"],["CEB-002","Cebolla Bola grande"],["CEB-003","Cebolla Morada"],["CEB-004","Cebolla Roja"],["CEB-005","Cebolla de rabo"]]},{"nombre":"Chayote","productos":[["CHA-003","Chayote"],["CHA-004","Chayote sin espinas"]]},{"nombre":"Chile","productos":[["CHI-002","Chile Anaheim"],["CHI-003","Chile Bola"],["CHI-004","Chile California"],["CHI-005","Chile Caloro"],["CHI-006","Chile Caribe"],["CHI-007","Chile Cat"],["CHI-008","Chile Chilaca"],["CHI-009","Chile Dulce"],["CHI-010","Chile Guajillo"],["CHI-011","Chile Habanero"],["CHI-012","Chile Húngaro"],["CHI-013","Chile Jalapeño"],["CHI-014","Chile Mirasol"],["CHI-015","Chile Pasilla"],["CHI-016","Chile Pimiento morrón"],["CHI-017","Chile Poblano"],["CHI-018","Chile Puya fresco"],["CHI-019","Chile Puya seco"],["CHI-020","Chile Serrano"],["CHI-021","Chile ancho"],["CHI-022","Chile de Árbol fresco"],["CHI-023","Chile de Árbol seco"]]},{"nombre":"Chícharo","productos":[["CHI-024","Chícharo"],["CHI-025","Chícharo arrugado"]]},{"nombre":"Ciruela","productos":[["CIR-001","Ciruela Allende"],["CIR-002","Ciruela Amarilla"],["CIR-003","Ciruela Claudia"],["CIR-004","Ciruela Moscatel"],["CIR-005","Ciruela Negra"],["CIR-006","Ciruela Piña"],["CIR-007","Ciruela Rayada"],["CIR-008","Ciruela Roja"],["CIR-009","Ciruela huesuda Amarilla"],["CIR-010","Ciruela huesuda Roja"],["CIR-011","Ciruela pasa"]]},{"nombre":"Col","productos":[["COL-001","Col grande"],["COL-002","Col mediana"],["COL-003","Col sin clasificación"],["COL-004","Coliflor grande"],["COL-005","Coliflor mediana"],["COL-006","Coliflor sin clasificación"]]},{"nombre":"Durazno","productos":[["DUR-001","Durazno Amarillo"],["DUR-002","Durazno Blanco"],["DUR-003","Durazno Melocotón"],["DUR-004","Durazno Prisco"]]},{"nombre":"Ejote","productos":[["EJO-001","Ejote"],["EJO-002","Ejote largo"],["EJO-003","Ejote redondo"]]},{"nombre":"Elote","productos":[["ELO-001","Elote"],["ELO-002","Elote grande"],["ELO-003","Elote mediano"]]},{"nombre":"Fresa","productos":[["FRE-001","Fresa"],["FRE-002","Fresa Chandler"],["FRE-003","Fresa Pico de pájaro"],["FRE-004","Fresa Solana"],["FRE-005","Fresa Teoga"]]},{"nombre":"Granada","productos":[["GRA-001","Granada China"],["GRA-002","Granada Roja"]]},{"nombre":"Jícama","productos":[["JIC-001","Jícama"],["JIC-002","Jícama mediana"],["JIC-003","Jícama piñatera"]]},{"nombre":"Lechuga","productos":[["LEC-001","Lechuga Orejona grande"],["LEC-002","Lechuga Orejona sin clasificación"],["LEC-003","Lechuga Romanita grande"],["LEC-004","Lechuga Romanita mediana"],["LEC-005","Lechuga Romanita sin clasificación"]]},{"nombre":"Limón","productos":[["LIM-002","Limon c/semilla sin clasificación"],["LIM-003","Limón Real"],["LIM-004","Limón c/semilla # 2 (tamaño del No.2)"],["LIM-005","Limón c/semilla # 3"],["LIM-006","Limón c/semilla # 4"],["LIM-007","Limón c/semilla # 5"],["LIM-008","Limón s/semilla"]]},{"nombre":"Mandarina","productos":[["MAN-001","Mandarina"],["MAN-002","Mandarina Mónica"],["MAN-003","Mandarina Reyna"],["MAN-004","Mandarina Tangerina"]]},{"nombre":"Mango","productos":[["MAN-005","Mango Ataulfo"],["MAN-006","Mango Criollo"],["MAN-007","Mango Diplomático"],["MAN-008","Mango Haden"],["MAN-009","Mango Indio"],["MAN-010","Mango Irwin"],["MAN-011","Mango Kent"],["MAN-012","Mango Mangloba"],["MAN-013","Mango Manila"],["MAN-014","Mango Manililla"],["MAN-015","Mango Oro"],["MAN-016","Mango Piña"],["MAN-017","Mango Tommy"]]},{"nombre":"Manzana","productos":[["MAN-018","Manzana Ana"],["MAN-019","Manzana Golden Delicious"],["MAN-020","Manzana Red Delicious"],["MAN-021","Manzana Rome Beauty"],["MAN-022","Manzana Starking"]]},{"nombre":"Melón","productos":[["MEL-001","Melon Cantaloupe # 14"],["MEL-002","Melón Cantaloupe # 12 (tamaño del No.12)"],["MEL-003","Melón Cantaloupe # 15"],["MEL-004","Melón Cantaloupe # 16"],["MEL-005","Melón Cantaloupe # 17"],["MEL-006","Melón Cantaloupe # 18"],["MEL-007","Melón Cantaloupe # 22"],["MEL-008","Melón Cantaloupe # 23"],["MEL-009","Melón Cantaloupe # 27"],["MEL-010","Melón Cantaloupe # 36"],["MEL-011","Melón Cantaloupe # 45"],["MEL-012","Melón Cantaloupe # 48"],["MEL-013","Melón Cantaloupe # 9"],["MEL-014","Melón Cantaloupe sin clasificación"],["MEL-015","Melón Gotas de miel"]]},{"nombre":"Naranja","productos":[["NAR-001","Naranja Agria"],["NAR-002","Naranja Albérchiga"],["NAR-003","Naranja Albérchiga chica"],["NAR-004","Naranja Albérchiga grande"],["NAR-005","Naranja Albérchiga mediana"],["NAR-006","Naranja March"],["NAR-007","Naranja March chica"],["NAR-008","Naranja March grande"],["NAR-009","Naranja March mediana"],["NAR-010","Naranja Valencia chica"],["NAR-011","Naranja Valencia grande"],["NAR-012","Naranja Valencia mediana"],["NAR-013","Naranja Valencia tardía chica"],["NAR-014","Naranja Valencia tardía mediana"]]},{"nombre":"Nopal","productos":[["NOP-001","Nopal"],["NOP-002","Nopal grande"]]},{"nombre":"Nuez","productos":[["NUE-001","Nuez"],["NUE-002","Nuez Wichita"],["NUE-003","Nuez cáscara de papel"],["NUE-004","Nuez de castilla"]]},{"nombre":"Papa","productos":[["PAP-001","Papa Alpha"],["PAP-002","Papa Furory"],["PAP-003","Papa Galeana"],["PAP-004","Papa Gema"],["PAP-005","Papa López"],["PAP-006","Papa Marciana"],["PAP-007","Papa Motzamba"],["PAP-008","Papa Roja"],["PAP-009","Papa Rosita"],["PAP-010","Papa Rouset"],["PAP-011","Papa San José"],["PAP-012","Papaya Amarilla"],["PAP-013","Papaya Maradol"],["PAP-014","Papaya Roja"]]},{"nombre":"Pera","productos":[["PER-001","Pera Asiática"],["PER-002","Pera Bartlett # 135"],["PER-003","Pera Bosco"],["PER-004","Pera D'anjou # 100"],["PER-005","Pera Kiffer"],["PER-006","Pera Lechera"],["PER-007","Pera Mantequilla"],["PER-008","Pera Paraíso"],["PER-009","Pera Piña"],["PER-010","Pera Ángel"]]},{"nombre":"Piña","productos":[["PIN-001","Piña chica"],["PIN-002","Piña grande"],["PIN-003","Piña mediana"]]},{"nombre":"Plátano","productos":[["PLA-001","Plátano Chiapas"],["PLA-002","Plátano Chiapas calidad exportación"],["PLA-003","Plátano Dominico"],["PLA-004","Plátano Enano-Gigante"],["PLA-005","Plátano Guineo"],["PLA-006","Plátano Macho"],["PLA-007","Plátano Manzano"],["PLA-008","Plátano Morado"],["PLA-009","Plátano Pera"],["PLA-010","Plátano Tabasco"],["PLA-011","Plátano Veracruz"]]},{"nombre":"Sandía","productos":[["SAN-001","Sandía Blanca"],["SAN-002","Sandía Call Sweet"],["SAN-003","Sandía Charleston"],["SAN-004","Sandía Jubilee"],["SAN-005","Sandía Negra"],["SAN-006","Sandía Peacock"],["SAN-007","Sandía Rayada"],["SAN-008","Sandía Sangría"]]},{"nombre":"Tomate","productos":[["TOM-001","Tomate Bola"],["TOM-002","Tomate Saladette"],["TOM-003","Tomate Verde"]]},{"nombre":"Toronja","productos":[["TOR-001","Toronja Amarilla"],["TOR-002","Toronja Blanca"],["TOR-003","Toronja Roja"],["TOR-004","Toronja Roja mediana"],["TOR-005","Toronja Rosada"]]},{"nombre":"Tuna","productos":[["TUN-001","Tuna"],["TUN-002","Tuna Blanca"]]},{"nombre":"Uva","productos":[["UVA-001","Uva Blanca"],["UVA-002","Uva Calmeria"],["UVA-003","Uva Cardenal"],["UVA-004","Uva Cornichon"],["UVA-005","Uva Emperador"],["UVA-006","Uva Flame"],["UVA-007","Uva Globo"],["UVA-008","Uva Moscatel"],["UVA-009","Uva Málaga"],["UVA-010","Uva Perlette"],["UVA-011","Uva Queen"],["UVA-012","Uva Rosa del Perú"],["UVA-013","Uva Superior"],["UVA-014","Uva Thompson"],["UVA-015","Uva Tokay"],["UVA-016","Uva pasa"],["UVA-017","Uva sin semilla"]]},{"nombre":"Zanahoria","productos":[["ZAN-001","Zanahoria leña"],["ZAN-002","Zanahoria mediana"],["ZAN-003","Zanahoria polvo"]]},{"nombre":"Zapote","productos":[["ZAP-001","Zapote"],["ZAP-002","Zapote Blanco"],["ZAP-003","Zapote Negro"]]},{"nombre":"Otros","productos":[["ACE-001","Acelga"],["API-001","Apio"],["BER-001","Berenjena"],["BET-001","Betabel"],["BRO-001","Brócoli"],["CAC-001","Cacahuate"],["CAL-004","Calabaza de castilla"],["CAM-001","Camote"],["CAN-001","Caña"],["CER-001","Cereza"],["CHA-001","Chabacano"],["CHA-002","Champiñón"],["CHI-001","Chico zapote"],["CIL-001","Cilantro"],["COC-001","Coco"],["EPA-001","Epazote"],["ESP-001","Espinaca"],["ESP-002","Espárrago"],["GUA-001","Guanabana"],["GUA-002","Guaya"],["GUA-003","Guayaba"],["HAB-001","Haba verde"],["HIG-001","Higo"],["JAM-001","Jamaica"],["KIW-001","Kiwi"],["LIM-001","Lima"],["MAM-001","Mamey"],["MEM-001","Membrillo"],["NAN-001","Nanche"],["NEC-001","Nectarina"],["ORE-001","Orégano"],["PEP-001","Pepino"],["PER-011","Perejil"],["PER-012","Perón"],["PIS-001","Pistache"],["PIT-001","Pitaya"],["RAB-001","Rábano"],["TAM-001","Tamarindo"],["TEJ-001","Tejocote"],["YER-001","Yerbabuena"],["ZAR-001","Zarzamora"]]}];
+
+/* =====================================================================
+   ESTADO DE LA APP
+===================================================================== */
+const estado = {
+  miActorId: null,
+  miRoles: [],
+  colaLocal: [],          // {tipo, id_transaccion, emisor_id, envelope, sincronizado, recibidoEn}
+  vistos: new Set(),      // dedupe: tipo+"|"+id_transaccion
+  noncesConsumidos: new Set(),
+  reensamblador: new Reensamblador(),
+  camaraActiva: null,     // instancia Html5Qrcode
+  ultimoTextoEscaneado: null,
+  miInventario: new Map(), // id_sniim -> {producto, cantidad_kg, calidad, precio_referencia_mxn_kg, disponible_desde, actualizadoEn}
+  miOrden: new Map(), // id_sniim -> {producto, cantidad_acordada_kg, precio_acordado_mxn_kg, actualizadoEn} — orden de compra en curso
+  _preseleccionarIdSniim: null, // usado por "Editar" en Mi Inventario para reabrir el picker en ese producto
+  perfiles: new Map(),     // actorId -> {nombre, ciudad, rol, actualizadoEn} — persistidos en este dispositivo
+  ultimaSincronizacion: null, // timestamp de la última sincronización automática (al abrir/cerrar la app)
+};
+
+/* =====================================================================
+   PERSISTENCIA LOCAL (sobrevive a recargar la página / cerrar el navegador)
+
+   Usa localStorage del navegador — funciona cuando abrís el archivo
+   descargado directamente o lo servís vos mismo (python -m http.server,
+   etc.), que es como está pensado usarse esta app. NO funciona dentro de
+   la vista previa embebida de un chat de IA (esos entornos aíslan/bloquean
+   localStorage); por eso todo el acceso va envuelto en try/catch y, si
+   falla, la app sigue funcionando normal pero solo en memoria de la
+   pestaña, sin persistencia.
+===================================================================== */
+const STORAGE_KEY = "maximax_estado_v1";
+
+function localStorageDisponible() {
+  try {
+    const k = "__maximax_test__";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+const PERSISTENCIA_OK = localStorageDisponible();
+
+function guardarEstado() {
+  if (!PERSISTENCIA_OK) return;
+  try {
+    const datos = {
+      version: 3, // v3: "Mi orden de compra" (miOrden) para armar OC con varios productos
+      miActorId: estado.miActorId,
+      miRoles: estado.miRoles,
+      perfiles: [...estado.perfiles.entries()],
+      miInventario: [...estado.miInventario.entries()],
+      miOrden: [...estado.miOrden.entries()],
+      colaLocal: estado.colaLocal,
+      vistos: [...estado.vistos],
+      noncesConsumidos: [...estado.noncesConsumidos],
+      ultimaSincronizacion: estado.ultimaSincronizacion,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(datos));
+  } catch (e) {
+    // almacenamiento lleno u otro error: la app sigue funcionando en memoria
+    console.warn("No se pudo guardar el estado localmente:", e);
+  }
+}
+
+function cargarEstado() {
+  if (!PERSISTENCIA_OK) return;
+  let raw;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { return; }
+  if (!raw) return;
+  let datos;
+  try { datos = JSON.parse(raw); } catch (e) { return; }
+  if (!datos || datos.version !== 3) return; // esquema desconocido/anterior: no restaurar
+
+  estado.miActorId = datos.miActorId || null;
+  estado.miRoles = datos.miRoles || [];
+  estado.perfiles = new Map(datos.perfiles || []);
+  estado.miInventario = new Map(datos.miInventario || []);
+  estado.miOrden = new Map(datos.miOrden || []);
+  estado.colaLocal = datos.colaLocal || [];
+  estado.vistos = new Set(datos.vistos || []);
+  estado.noncesConsumidos = new Set(datos.noncesConsumidos || []);
+  estado.ultimaSincronizacion = datos.ultimaSincronizacion || null;
+}
+
+cargarEstado();
+
+function mostrarEstadoPersistencia() {
+  const cont = document.getElementById("msgPersistencia");
+  if (!cont) return;
+  cont.innerHTML = PERSISTENCIA_OK
+    ? `<div class="msg ok">Este dispositivo guarda tus datos: identidad, inventario y cola local
+        sobreviven a recargar la página o cerrar el navegador.</div>`
+    : `<div class="msg warn">No se pudo activar el guardado persistente en este entorno (por ejemplo,
+        dentro de una vista previa embebida). Todo va a funcionar igual, pero se pierde al recargar —
+        abrí el archivo descargado directamente, o serví la carpeta con un servidor local, para que
+        persista.</div>`;
+}
+
+/* =====================================================================
+   NAVEGACIÓN DE TABS
+===================================================================== */
+document.querySelectorAll("nav.tabbar button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabbar button").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll("section.tab").forEach((s) => s.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelector(`section.tab[data-tab="${btn.dataset.tab}"]`).classList.add("active");
+    if (btn.dataset.tab === "panel") actualizarPanel();
+  });
+});
+
+document.querySelectorAll(".subtab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".subtab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".subtab-content").forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("subtab" + btn.dataset.subtab).classList.add("active");
+  });
+});
+
+/* =====================================================================
+   INDICADOR DE CONECTIVIDAD (real, navigator.onLine)
+===================================================================== */
+function actualizarPillConexion() {
+  const pill = document.getElementById("connPill");
+  const txt = document.getElementById("connText");
+  if (navigator.onLine) { pill.classList.add("online"); txt.textContent = "con conexión"; }
+  else { pill.classList.remove("online"); txt.textContent = "sin conexión"; }
+}
+window.addEventListener("online", actualizarPillConexion);
+window.addEventListener("offline", actualizarPillConexion);
+actualizarPillConexion();
+
+/* =====================================================================
+   TAB: IDENTIDAD
+===================================================================== */
+const ROLES_DISPONIBLES = ["productor", "comprador", "transportista"];
+const ETIQUETA_ROL = { productor: "Productor", comprador: "Comprador", transportista: "Transportista" };
+
+function leerRolesSeleccionados() {
+  return [...document.querySelectorAll(".rol-checkbox:checked")].map((cb) => cb.value);
+}
+function marcarRolesEnFormulario(roles) {
+  document.querySelectorAll(".rol-checkbox").forEach((cb) => {
+    cb.checked = roles.includes(cb.value);
+    cb.closest(".rol-check").classList.toggle("checked", cb.checked); // respaldo por si el navegador no soporta :has()
+  });
+}
+document.querySelectorAll(".rol-checkbox").forEach((cb) => {
+  cb.addEventListener("change", () => cb.closest(".rol-check").classList.toggle("checked", cb.checked));
+});
+
+// Muestra, dentro de la pestaña Identidad, el inventario ya capturado
+// (si lo hay) — al volver a identificarse, se ve lo que ya se había
+// cargado en INV, sin tener que ir a la pestaña Generar.
+// Arma "Mi inventario guardado" como una lista de texto simple y la
+// comparte con el share sheet nativo si está disponible (Web Share API);
+// si no, la copia al portapapeles. Funciona desde cualquier lugar que
+// muestre el inventario — el botón usa delegación de eventos más abajo,
+// así que no importa si la tarjeta se dibujó de forma estática o se
+// reconstruye dinámicamente (como la de Panel).
+async function compartirInventarioComoLista() {
+  if (estado.miInventario.size === 0) {
+    alert("Todavía no tenés productos guardados en tu inventario.");
+    return;
+  }
+  const lineas = [...estado.miInventario.values()]
+    .sort((a, b) => a.producto.localeCompare(b.producto))
+    .map((p) => `- ${p.producto} (${p.id_sniim}): ${p.cantidad_kg} kg` +
+      `${p.calidad ? " · " + p.calidad : ""} · ${p.precio_referencia_mxn_kg} MXN/kg`);
+  const texto = `Mi inventario — Maximax (${new Date().toLocaleDateString()})\n${lineas.join("\n")}`;
+
+  if (navigator.share) {
+    try { await navigator.share({ title: "Mi inventario — Maximax", text: texto }); }
+    catch (e) { /* el usuario canceló el share sheet — no hacer nada */ }
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      alert("Tu navegador no tiene botón de compartir directo — se copió el inventario al portapapeles.");
+      return;
+    } catch (e) { /* sigue al último recurso */ }
+  }
+  alert(texto); // último recurso: mostrarlo para copiar a mano
+}
+
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest && ev.target.closest(".btn-compartir-inventario")) {
+    compartirInventarioComoLista();
+  }
+});
+
+function actualizarResumenInventarioIdentidad() {
+  const card = document.getElementById("cardInventarioIdentidad");
+  const cont = document.getElementById("inventarioIdentidadLista");
+  if (estado.miInventario.size === 0) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  cont.innerHTML = [...estado.miInventario.values()]
+    .sort((a, b) => b.actualizadoEn - a.actualizadoEn)
+    .map((item) => `
+      <div class="inv-item">
+        <div class="inv-item-info">
+          <span class="badge INV">${item.id_sniim}</span> <span class="nombre">${item.producto}</span><br>
+          <span class="detalle">${item.cantidad_kg} kg${item.calidad ? " · " + item.calidad : ""} ·
+            ${item.precio_referencia_mxn_kg} MXN/kg</span>
+        </div>
+      </div>`)
+    .join("");
+}
+
+// Precarga nombre/ciudad/roles si el identificador escrito ya tiene un
+// perfil guardado (para editarlo). Si es la primera vez, no hace nada —
+// el formulario queda en blanco para completarlo.
+function reconocerIdentificador() {
+  const id = document.getElementById("miActorId").value.trim();
+  const msg = document.getElementById("msgReconocido");
+  if (!id) { msg.innerHTML = ""; return; }
+  const perfil = estado.perfiles.get(id);
+  if (!perfil) {
+    msg.innerHTML = `<div class="msg info">Identificador nuevo — completá nombre, ciudad y al menos
+      un rol para registrarte.</div>`;
+    return;
+  }
+  document.getElementById("nombrePersona").value = perfil.nombre;
+  document.getElementById("ciudadPersona").value = perfil.ciudad;
+  marcarRolesEnFormulario(perfil.roles || []);
+  msg.innerHTML = `<div class="msg ok">Te reconocemos, <b>${perfil.nombre}</b> — datos cargados de tu
+    registro anterior (${new Date(perfil.actualizadoEn).toLocaleString()}).</div>`;
+  actualizarResumenInventarioIdentidad();
+}
+document.getElementById("miActorId").addEventListener("blur", reconocerIdentificador);
+document.getElementById("miActorId").addEventListener("change", reconocerIdentificador);
+
+// "Modificar ID": el identificador queda fijo (readonly) una vez que ya
+// hay una identidad guardada, para no crear un perfil nuevo por accidente
+// al escribir encima. Este botón lo desbloquea a propósito.
+document.getElementById("btnModificarId").addEventListener("click", () => {
+  const campoId = document.getElementById("miActorId");
+  campoId.readOnly = false;
+  campoId.focus();
+  campoId.select();
+  document.getElementById("msgReconocido").innerHTML =
+    `<div class="msg warn">Escribí el nuevo identificador y tocá "Guardar identidad" para confirmarlo
+      — tu nombre, ciudad y roles se conservan.</div>`;
+});
+
+function actualizarVisibilidadBotonModificarId() {
+  const btn = document.getElementById("btnModificarId");
+  const campoId = document.getElementById("miActorId");
+  const hayIdentidad = !!estado.miActorId;
+  btn.style.display = hayIdentidad ? "inline-block" : "none";
+  campoId.readOnly = hayIdentidad; // bloqueado por defecto si ya hay una identidad guardada
+}
+
+document.getElementById("btnGuardarIdentidad").addEventListener("click", () => {
+  const idNuevo = document.getElementById("miActorId").value.trim();
+  const nombre = document.getElementById("nombrePersona").value.trim();
+  const ciudad = document.getElementById("ciudadPersona").value.trim();
+  const roles = leerRolesSeleccionados();
+  const msg = document.getElementById("msgIdentidad");
+
+  if (!idNuevo) { msg.innerHTML = `<div class="msg err">Escribí un identificador.</div>`; return; }
+  if (!nombre || !ciudad) {
+    msg.innerHTML = `<div class="msg err">Completá nombre y ciudad para identificarte.</div>`;
+    return;
+  }
+  if (roles.length === 0) {
+    msg.innerHTML = `<div class="msg err">Elegí al menos un rol.</div>`;
+    return;
+  }
+
+  const idAnterior = estado.miActorId;
+  const esModificacionDeId = idAnterior && idAnterior !== idNuevo;
+  if (esModificacionDeId) {
+    estado.perfiles.delete(idAnterior); // se renombra: no queda un perfil huérfano con el id viejo
+  }
+
+  const yaExistia = !esModificacionDeId && estado.perfiles.has(idNuevo);
+  estado.perfiles.set(idNuevo, { nombre, ciudad, roles, actualizadoEn: Date.now() });
+  estado.miActorId = idNuevo;
+  estado.miRoles = roles;
+
+  msg.innerHTML = esModificacionDeId
+    ? `<div class="msg ok">Identificador actualizado: ahora sos <b>${idNuevo}</b>.</div>`
+    : yaExistia
+      ? `<div class="msg ok">Identidad actualizada. Seguís como <b>${nombre}</b> (${idNuevo}).</div>`
+      : `<div class="msg ok">Identidad guardada. Ya podés generar paquetes como <b>${nombre}</b> (${idNuevo}).</div>`;
+
+  document.getElementById("cardIdentidadActual").style.display = "block";
+  document.getElementById("idActualTexto").textContent = idNuevo;
+  document.getElementById("nombreActualTexto").textContent = nombre;
+  document.getElementById("ciudadActualTexto").textContent = ciudad;
+  document.getElementById("rolActualTexto").textContent = roles.map((r) => ETIQUETA_ROL[r] || r).join(", ");
+  actualizarResumenInventarioIdentidad();
+  actualizarVisibilidadBotonModificarId();
+  actualizarHistorico(); // "Generar QR" depende de quién está conectado — refrescar al cambiar de identidad
+  guardarEstado();
+});
+
+/* =====================================================================
+   TAB: GENERAR — formularios dinámicos por tipo
+===================================================================== */
+const CAMPOS = {
+  INV: [
+    { id: "producto", label: "Producto (catálogo SNIIM)", type: "catalogo" },
+    { id: "cantidad_kg", label: "Cantidad (kg)", type: "number", placeholder: "1200" },
+    { id: "calidad", label: "Calidad (opcional)", type: "text", placeholder: "Extra", required: false },
+    { id: "precio_referencia_mxn_kg", label: "Precio de referencia (MXN/kg)", type: "number", step: "0.01", placeholder: "38.50" },
+    { id: "disponible_desde", label: "Disponible desde", type: "date" },
+  ],
+  OC: [
+    { id: "producto", label: "Producto (catálogo SNIIM)", type: "catalogo" },
+    { id: "cantidad_acordada_kg", label: "Cantidad acordada (kg)", type: "number", placeholder: "1000" },
+    { id: "precio_acordado_mxn_kg", label: "Precio acordado (MXN/kg)", type: "number", step: "0.01", placeholder: "39.00" },
+    { id: "comprador_id", label: "ID del comprador", type: "text", autofill: true, readonly: true },
+  ],
+  CE: [
+    { id: "producto", label: "Producto (catálogo SNIIM)", type: "catalogo" },
+    { id: "id_orden_ref", label: "id_transacción del QR-OC que se entrega", type: "text", placeholder: "p. ej. a1b2c3d4" },
+    { id: "cantidad_recibida_kg", label: "Cantidad recibida (kg)", type: "number", placeholder: "998" },
+    { id: "calidad_observada", label: "Calidad observada", type: "select", options: ["Conforme", "Con observaciones"] },
+    { id: "evidencia_hash", label: "Hash de evidencia (no el archivo)", type: "text", placeholder: "sha256:9f2a...c31b" },
+    { id: "geolocalizacion", label: "Geolocalización (lat,long)", type: "geoloc" },
+  ],
+  CR: [
+    { id: "producto", label: "Producto (catálogo SNIIM)", type: "catalogo" },
+    { id: "id_ce_ref", label: "id_transacción del QR-CE que estás recibiendo", type: "text", placeholder: "p. ej. a1b2c3d4" },
+    { id: "cantidad_recibida_kg", label: "Cantidad recibida (kg)", type: "number", placeholder: "998" },
+    { id: "calidad_observada", label: "Calidad observada", type: "select", options: ["Conforme", "Con observaciones"] },
+    { id: "evidencia_hash", label: "Hash de evidencia (no el archivo)", type: "text", placeholder: "sha256:9f2a...c31b" },
+    { id: "geolocalizacion", label: "Geolocalización (lat,long)", type: "geoloc" },
+  ],
+};
+
+let seleccionCatalogo = null; // {id_sniim, producto} — elegido en el picker del catálogo SNIIM
+
+/* Picker de catálogo: TODAS las listas quedan siempre visibles; el buscador
+   solo desplaza la vista hasta la lista/producto que coincide — no filtra
+   ni oculta el resto. */
+/* =====================================================================
+   Guardado/descarte al cambiar de producto en INV (correcciones pedidas)
+===================================================================== */
+function fechaHoyISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// "calidad" es opcional (puede quedar vacío); el resto son obligatorios
+// para decidir si hay que guardar automáticamente o preguntar al cambiar
+// de producto (ver intentarCambiarProducto).
+const CAMPOS_INV_REQUERIDOS = ["cantidad_kg", "precio_referencia_mxn_kg", "disponible_desde"];
+const CAMPOS_INV_OPCIONALES = ["calidad"];
+const CAMPOS_INV_DATA = [...CAMPOS_INV_REQUERIDOS, ...CAMPOS_INV_OPCIONALES];
+
+function leerCamposInvActuales() {
+  const valores = {};
+  let llenos = 0;
+  let algunoExiste = false;
+  CAMPOS_INV_DATA.forEach((id) => {
+    const el = document.getElementById("f_" + id);
+    if (!el) return;
+    algunoExiste = true;
+    valores[id] = el.value;
+  });
+  CAMPOS_INV_REQUERIDOS.forEach((id) => {
+    if (valores[id] !== undefined && valores[id] !== "") llenos++;
+  });
+  return { valores, llenos, total: CAMPOS_INV_REQUERIDOS.length, existe: algunoExiste };
+}
+
+function limpiarCamposInv() {
+  CAMPOS_INV_DATA.forEach((id) => {
+    const el = document.getElementById("f_" + id);
+    if (!el) return;
+    // "Disponible desde" siempre vuelve a la fecha de hoy (es un valor por
+    // defecto útil), el resto se limpia en blanco.
+    el.value = id === "disponible_desde" ? fechaHoyISO() : "";
+  });
+}
+
+// Mismos helpers que INV, pero para el armado manual de una orden de
+// compra (OC) con varios productos — "comprador_id" es un dato de la
+// orden completa, no de cada producto, así que no se limpia al cambiar
+// de producto.
+const CAMPOS_OC_REQUERIDOS = ["cantidad_acordada_kg", "precio_acordado_mxn_kg"];
+
+function leerCamposOcActuales() {
+  const valores = {};
+  let llenos = 0;
+  let algunoExiste = false;
+  CAMPOS_OC_REQUERIDOS.forEach((id) => {
+    const el = document.getElementById("f_" + id);
+    if (!el) return;
+    algunoExiste = true;
+    valores[id] = el.value;
+    if (el.value !== undefined && el.value !== "") llenos++;
+  });
+  return { valores, llenos, total: CAMPOS_OC_REQUERIDOS.length, existe: algunoExiste };
+}
+
+function limpiarCamposOc() {
+  CAMPOS_OC_REQUERIDOS.forEach((id) => {
+    const el = document.getElementById("f_" + id);
+    if (el) el.value = "";
+  });
+}
+
+function mostrarConfirmModal(mensaje) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("modalConfirm");
+    document.getElementById("modalConfirmText").textContent = mensaje;
+    overlay.style.display = "flex";
+    const btnDescartar = document.getElementById("modalConfirmDescartar");
+    const btnSeguir = document.getElementById("modalConfirmSeguir");
+    const cerrar = (resultado) => {
+      overlay.style.display = "none";
+      btnDescartar.removeEventListener("click", onDescartar);
+      btnSeguir.removeEventListener("click", onSeguir);
+      resolve(resultado);
+    };
+    const onDescartar = () => cerrar(true);
+    const onSeguir = () => cerrar(false);
+    btnDescartar.addEventListener("click", onDescartar);
+    btnSeguir.addEventListener("click", onSeguir);
+  });
+}
+
+/* Antes de cambiar de producto (elegir otro del catálogo, quitar la
+   selección, o abrir "Editar" desde Mi Inventario / Mi Orden), valida
+   qué hay cargado del producto ANTERIOR — funciona igual para INV y OC:
+     - todos los campos llenos  -> se guarda automáticamente
+     - ninguno lleno            -> cambia directo, nada que hacer
+     - parcialmente lleno       -> pregunta descartar / seguir editando
+   `accionCambio` es la función que ejecuta el cambio en sí. */
+async function intentarCambiarProducto(accionCambio) {
+  const tipoActual = document.getElementById("tipoPaquete") ? document.getElementById("tipoPaquete").value : null;
+  if ((tipoActual !== "INV" && tipoActual !== "OC") || !seleccionCatalogo) { accionCambio(); return; }
+
+  const anterior = seleccionCatalogo; // producto que se está dejando
+  const lector = tipoActual === "INV" ? leerCamposInvActuales : leerCamposOcActuales;
+  const { valores, llenos, total, existe } = lector();
+  if (!existe || llenos === 0) { accionCambio(); return; }
+
+  if (llenos === total) {
+    if (tipoActual === "INV") {
+      estado.miInventario.set(anterior.id_sniim, {
+        producto: anterior.producto,
+        id_sniim: anterior.id_sniim,
+        cantidad_kg: parseFloat(valores.cantidad_kg),
+        calidad: valores.calidad,
+        precio_referencia_mxn_kg: parseFloat(valores.precio_referencia_mxn_kg),
+        disponible_desde: valores.disponible_desde,
+        actualizadoEn: Date.now(),
+      });
+      if (typeof actualizarMiInventarioUI === "function") actualizarMiInventarioUI();
+    } else {
+      estado.miOrden.set(anterior.id_sniim, {
+        producto: anterior.producto,
+        id_sniim: anterior.id_sniim,
+        cantidad_acordada_kg: parseFloat(valores.cantidad_acordada_kg),
+        precio_acordado_mxn_kg: parseFloat(valores.precio_acordado_mxn_kg),
+        actualizadoEn: Date.now(),
+      });
+      if (typeof actualizarMiOrdenUI === "function") actualizarMiOrdenUI();
+    }
+    guardarEstado();
+    accionCambio();
+    return;
+  }
+
+  // Parcialmente lleno: preguntar.
+  const descartar = await mostrarConfirmModal(
+    `Tenés datos parcialmente llenos de "${anterior.producto}" (${llenos} de ${total} campos). ` +
+    `¿Descartás esos cambios y seguís con el otro producto, o preferís quedarte editando "${anterior.producto}"?`
+  );
+  if (descartar) accionCambio();
+  // si no descarta, no se hace nada: se queda en el producto/edición actual
+}
+
+function construirPickerCatalogo(tipoActual) {
+  const wrap = document.createElement("div");
+  wrap.className = "catalogo-wrap";
+
+  const barra = document.createElement("div");
+  barra.className = "catalogo-buscar";
+  barra.innerHTML = `
+    <input type="text" id="catalogoBuscar" placeholder="Buscar producto o categoría… (te lleva a la lista)" autocomplete="off">
+    <div id="catalogoBuscarMsg" class="catalogo-buscar-msg"></div>`;
+  wrap.appendChild(barra);
+
+  const seleccionActual = document.createElement("div");
+  seleccionActual.id = "catalogoSeleccionActual";
+  seleccionActual.className = "catalogo-seleccion";
+  seleccionActual.innerHTML = `<span class="muted">Ningún producto seleccionado todavía.</span>`;
+  wrap.appendChild(seleccionActual);
+
+  const sugerencias = document.createElement("div");
+  sugerencias.id = "catalogoSugerencias";
+  wrap.appendChild(sugerencias);
+
+  const listasCont = document.createElement("div");
+  listasCont.className = "catalogo-listas";
+  listasCont.id = "catalogoListas";
+
+  function limpiarSeleccion() {
+    seleccionCatalogo = null;
+    seleccionActual.innerHTML = `<span class="muted">Ningún producto seleccionado todavía.</span>`;
+    sugerencias.innerHTML = "";
+    document.querySelectorAll(".catalogo-item.selected").forEach((n) => n.classList.remove("selected"));
+    if (tipoActual === "INV") limpiarCamposInv();
+    if (tipoActual === "OC") limpiarCamposOc();
+    if (typeof actualizarMiInventarioUI === "function") actualizarMiInventarioUI();
+    if (typeof actualizarMiOrdenUI === "function") actualizarMiOrdenUI();
+    if (typeof revisarErrorGenerarResuelto === "function") revisarErrorGenerarResuelto();
+  }
+
+  function alSeleccionarProducto(item, id_sniim, nombre) {
+    document.querySelectorAll(".catalogo-item.selected").forEach((n) => n.classList.remove("selected"));
+    item.classList.add("selected");
+    seleccionCatalogo = { id_sniim, producto: nombre };
+    seleccionActual.innerHTML =
+      `<span class="badge INV">${id_sniim}</span> <b>${nombre}</b>
+       <button type="button" class="ghost small" id="btnQuitarSeleccion" style="margin-left:8px;">Quitar</button>`;
+    document.getElementById("btnQuitarSeleccion").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      intentarCambiarProducto(() => limpiarSeleccion());
+    });
+
+    if (tipoActual === "INV") {
+      // Limpiar SIEMPRE lo anterior (corrección #2): cada cambio de producto
+      // arranca en blanco, y solo se precarga si HAY datos guardados de este.
+      limpiarCamposInv();
+      const guardado = estado.miInventario.get(id_sniim);
+      if (guardado) {
+        CAMPOS_INV_DATA.forEach((campoId) => {
+          const el = document.getElementById("f_" + campoId);
+          if (el && guardado[campoId] !== undefined) el.value = guardado[campoId];
+        });
+        sugerencias.innerHTML = `<div class="msg info">Cargado desde tu inventario guardado
+          (actualizado ${new Date(guardado.actualizadoEn).toLocaleString()}). Editá lo que cambió
+          y volvé a generar para actualizarlo.</div>`;
+      } else {
+        sugerencias.innerHTML = "";
+      }
+      if (typeof actualizarMiInventarioUI === "function") actualizarMiInventarioUI();
+    } else if (tipoActual === "OC") {
+      // Igual que INV: limpiar siempre lo anterior y precargar si ya
+      // había datos guardados de este producto en "Mi orden de compra".
+      limpiarCamposOc();
+      const guardado = estado.miOrden.get(id_sniim);
+      if (guardado) {
+        CAMPOS_OC_REQUERIDOS.forEach((campoId) => {
+          const el = document.getElementById("f_" + campoId);
+          if (el && guardado[campoId] !== undefined) el.value = guardado[campoId];
+        });
+        sugerencias.innerHTML = `<div class="msg info">Cargado desde tu orden en curso
+          (actualizado ${new Date(guardado.actualizadoEn).toLocaleString()}). Editá lo que cambió
+          y volvé a generar para actualizarlo.</div>`;
+      } else {
+        sugerencias.innerHTML = "";
+      }
+      if (typeof actualizarMiOrdenUI === "function") actualizarMiOrdenUI();
+    } else if (tipoActual === "CE") {
+      const campoRef = document.getElementById("f_id_orden_ref");
+      const matches = estado.colaLocal.filter((it) =>
+        it.tipo === "OC" && productosDeEnvelopeOC(it.envelope).some((u) => u.id_sniim === id_sniim));
+      renderSugerenciasReferencia(sugerencias, matches, campoRef,
+        "Órdenes de compra de este producto en tu cola local:");
+    }
+    if (typeof revisarErrorGenerarResuelto === "function") revisarErrorGenerarResuelto();
+  }
+
+  CATALOGO_SNIIM.forEach((lista, li) => {
+    const grupo = document.createElement("div");
+    grupo.className = "catalogo-grupo";
+    grupo.id = "catgrupo_" + li;
+    grupo.dataset.nombre = lista.nombre.toLowerCase();
+
+    const h = document.createElement("div");
+    h.className = "catalogo-grupo-titulo";
+    h.textContent = `${lista.nombre} · ${lista.productos.length}`;
+    grupo.appendChild(h);
+
+    const ul = document.createElement("div");
+    ul.className = "catalogo-items";
+    lista.productos.forEach(([id_sniim, nombre]) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "catalogo-item";
+      item.dataset.nombre = nombre.toLowerCase();
+      item.dataset.idSniim = id_sniim;
+      const yaGuardado = (tipoActual === "INV" && estado.miInventario.has(id_sniim)) ||
+                          (tipoActual === "OC" && estado.miOrden.has(id_sniim));
+      if (yaGuardado) item.classList.add("has-saved");
+      item.innerHTML = `<span class="catalogo-item-codigo">${id_sniim}</span><span>${nombre}</span>${
+        yaGuardado ? '<span class="catalogo-item-guardado" title="Ya está agregado">●</span>' : ""
+      }`;
+      item.addEventListener("click", () => {
+        if (tipoActual === "INV") intentarCambiarProducto(() => alSeleccionarProducto(item, id_sniim, nombre));
+        else alSeleccionarProducto(item, id_sniim, nombre);
+      });
+      ul.appendChild(item);
+    });
+    grupo.appendChild(ul);
+    listasCont.appendChild(grupo);
+  });
+  wrap.appendChild(listasCont);
+
+  const buscarInput = barra.querySelector("#catalogoBuscar");
+  const buscarMsg = barra.querySelector("#catalogoBuscarMsg");
+  buscarInput.addEventListener("input", () => {
+    const q = buscarInput.value.trim().toLowerCase();
+    document.querySelectorAll(".catalogo-grupo.jump-highlight").forEach((g) => g.classList.remove("jump-highlight"));
+    if (!q) { buscarMsg.textContent = ""; return; }
+
+    // 1) coincidencia por nombre de lista (Producto_Base); 2) por producto individual
+    let grupoDestino = [...listasCont.children].find((g) => g.dataset.nombre.includes(q));
+    let itemDestino = null;
+    if (!grupoDestino) {
+      itemDestino = listasCont.querySelector(`.catalogo-item[data-nombre*="${CSS.escape(q)}"]`);
+      if (itemDestino) grupoDestino = itemDestino.closest(".catalogo-grupo");
+    }
+    if (grupoDestino) {
+      buscarMsg.textContent = `→ ${grupoDestino.querySelector(".catalogo-grupo-titulo").textContent}`;
+      grupoDestino.scrollIntoView({ behavior: "smooth", block: "start" });
+      grupoDestino.classList.add("jump-highlight");
+      if (itemDestino) itemDestino.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      buscarMsg.textContent = "Sin coincidencias — las listas completas siguen abajo.";
+    }
+  });
+
+  // Si venimos de "Editar" en Mi Inventario o en Mi Orden, preseleccionar
+  // el producto correspondiente.
+  if ((tipoActual === "INV" || tipoActual === "OC") && estado._preseleccionarIdSniim) {
+    const id = estado._preseleccionarIdSniim;
+    estado._preseleccionarIdSniim = null;
+    const itemPre = listasCont.querySelector(`.catalogo-item[data-id-sniim="${CSS.escape(id)}"]`);
+    if (itemPre) setTimeout(() => itemPre.click(), 0);
+  }
+
+  return wrap;
+}
+
+function renderSugerenciasReferencia(cont, matches, campoRefEl, titulo) {
+  cont.innerHTML = "";
+  if (matches.length === 0) {
+    cont.innerHTML = `<div class="msg info">Sin coincidencias todavía en tu cola local para este producto —
+      completá la referencia a mano.</div>`;
+    return;
+  }
+  const box = document.createElement("div");
+  box.className = "msg info";
+  const titleEl = document.createElement("div");
+  titleEl.textContent = titulo;
+  box.appendChild(titleEl);
+  const list = document.createElement("div");
+  list.className = "ref-sugerida-list";
+  matches.forEach((it) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ref-sugerida";
+    btn.innerHTML = `<span class="mono">${it.id_transaccion}</span><span class="muted">· ${it.emisor_id}</span>`;
+    btn.addEventListener("click", () => {
+      if (campoRefEl) campoRefEl.value = it.id_transaccion;
+      list.querySelectorAll(".ref-sugerida").forEach((b) => b.classList.remove("chosen"));
+      btn.classList.add("chosen");
+    });
+    list.appendChild(btn);
+  });
+  box.appendChild(list);
+  cont.appendChild(box);
+}
+
+
+function renderFormulario() {
+  const tipo = document.getElementById("tipoPaquete").value;
+  const cont = document.getElementById("camposFormulario");
+  cont.innerHTML = "";
+  seleccionCatalogo = null;
+  CAMPOS[tipo].forEach((campo) => {
+    const label = document.createElement("label");
+    label.textContent = campo.label;
+    label.htmlFor = "f_" + campo.id;
+    cont.appendChild(label);
+
+    if (campo.type === "catalogo") {
+      cont.appendChild(construirPickerCatalogo(tipo));
+    } else if (campo.type === "select") {
+      const sel = document.createElement("select");
+      sel.id = "f_" + campo.id;
+      campo.options.forEach((o) => { const op = document.createElement("option"); op.value = o; op.textContent = o; sel.appendChild(op); });
+      cont.appendChild(sel);
+    } else if (campo.type === "geoloc") {
+      const wrap = document.createElement("div");
+      wrap.style.display = "flex"; wrap.style.gap = "8px";
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.id = "f_" + campo.id; inp.placeholder = "19.4133,-102.0526"; inp.style.flex = "1";
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = "📍"; btn.className = "ghost small";
+      btn.addEventListener("click", () => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          (pos) => { inp.value = pos.coords.latitude.toFixed(6) + "," + pos.coords.longitude.toFixed(6); },
+          () => { /* sin permiso o sin GPS: el usuario puede escribirlo a mano */ }
+        );
+      });
+      wrap.appendChild(inp); wrap.appendChild(btn);
+      cont.appendChild(wrap);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = campo.type; inp.id = "f_" + campo.id;
+      if (campo.placeholder) inp.placeholder = campo.placeholder;
+      if (campo.step) inp.step = campo.step;
+      if (campo.autofill && estado.miActorId) inp.value = estado.miActorId;
+      if (campo.id === "disponible_desde") inp.value = fechaHoyISO();
+      if (campo.readonly) { inp.readOnly = true; inp.classList.add("input-readonly"); }
+      cont.appendChild(inp);
+    }
+  });
+  document.getElementById("miInventarioCard").style.display = tipo === "INV" ? "block" : "none";
+  if (tipo === "INV") actualizarMiInventarioUI();
+  document.getElementById("miOrdenCard").style.display = tipo === "OC" ? "block" : "none";
+  if (tipo === "OC") actualizarMiOrdenUI();
+
+  // Corrección #1: en cuanto se completa el campo que faltaba, el error
+  // de "Firmar y generar QR" desaparece solo, sin tener que volver a tocar
+  // el botón.
+  cont.querySelectorAll("input, select").forEach((el) => {
+    el.addEventListener("input", revisarErrorGenerarResuelto);
+    el.addEventListener("change", revisarErrorGenerarResuelto);
+  });
+
+  // En OC: en cuanto cantidad y precio del producto activo están
+  // completos, se guarda solo a "Mi orden de compra" y el formulario se
+  // limpia para elegir el siguiente producto — no hace falta tocar
+  // "Quitar" ni elegir otro producto a mano para que se guarde.
+  if (tipo === "OC") {
+    ["cantidad_acordada_kg", "precio_acordado_mxn_kg"].forEach((id) => {
+      const el = document.getElementById("f_" + id);
+      if (el) el.addEventListener("change", intentarGuardarProductoOCyAvanzar);
+    });
+  }
+}
+
+function intentarGuardarProductoOCyAvanzar() {
+  if (!seleccionCatalogo) return;
+  const { valores, llenos, total, existe } = leerCamposOcActuales();
+  if (!existe || llenos < total) return; // todavía no está completo, no hacer nada
+
+  const nombreGuardado = seleccionCatalogo.producto;
+  estado.miOrden.set(seleccionCatalogo.id_sniim, {
+    producto: seleccionCatalogo.producto,
+    id_sniim: seleccionCatalogo.id_sniim,
+    cantidad_acordada_kg: parseFloat(valores.cantidad_acordada_kg),
+    precio_acordado_mxn_kg: parseFloat(valores.precio_acordado_mxn_kg),
+    actualizadoEn: Date.now(),
+  });
+  guardarEstado();
+
+  renderFormulario(); // limpia los campos y vuelve a armar el catálogo con el nuevo estado
+
+  const msg = document.getElementById("msgGenerar");
+  if (msg) msg.innerHTML = `<div class="msg ok">✓ "${nombreGuardado}" agregado a la orden. Elegí el
+    siguiente producto, o generá el QR cuando termines.</div>`;
+}
+
+document.getElementById("tipoPaquete").addEventListener("change", renderFormulario);
+renderFormulario();
+
+function actualizarMiInventarioUI() {
+  const cont = document.getElementById("miInventarioLista");
+  if (estado.miInventario.size === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Todavía no guardaste ningún producto. Se guarda
+      automáticamente la primera vez que generás un QR-INV.</p>`;
+    return;
+  }
+  cont.innerHTML = "";
+  const idSeleccionadoActual = seleccionCatalogo ? seleccionCatalogo.id_sniim : null;
+  [...estado.miInventario.entries()]
+    .sort((a, b) => b[1].actualizadoEn - a[1].actualizadoEn)
+    .forEach(([id_sniim, item]) => {
+      const esElActivo = id_sniim === idSeleccionadoActual;
+      const row = document.createElement("div");
+      row.className = "inv-item" + (esElActivo ? " inv-item-activo" : "");
+      row.innerHTML = `
+        <div class="inv-item-info">
+          <span class="badge INV">${id_sniim}</span> <span class="nombre">${item.producto}</span>
+          ${esElActivo ? '<span class="inv-item-activo-tag">posicionado aquí</span>' : ""}<br>
+          <span class="detalle">${item.cantidad_kg} kg${item.calidad ? " · " + item.calidad : ""} · ${item.precio_referencia_mxn_kg} MXN/kg ·
+            actualizado ${new Date(item.actualizadoEn).toLocaleString()}</span>
+        </div>
+        <div class="inv-item-acciones">
+          <button type="button" class="secondary small" data-accion="editar">Editar</button>
+          <button type="button" class="danger small" data-accion="eliminar" ${esElActivo ? "" : "disabled"}
+            title="${esElActivo ? "Eliminar este producto" : "Elegí este producto en el catálogo (arriba) para poder eliminarlo"}">Eliminar</button>
+        </div>`;
+      row.querySelector('[data-accion="editar"]').addEventListener("click", () => {
+        const accion = () => {
+          document.getElementById("tipoPaquete").value = "INV";
+          estado._preseleccionarIdSniim = id_sniim;
+          renderFormulario();
+          document.getElementById("camposFormulario").scrollIntoView({ behavior: "smooth", block: "start" });
+        };
+        if (esElActivo) accion(); // ya estás posicionado en este producto: no hay nada que "cambiar"
+        else intentarCambiarProducto(accion);
+      });
+      const btnEliminar = row.querySelector('[data-accion="eliminar"]');
+      if (esElActivo) {
+        btnEliminar.addEventListener("click", () => {
+          estado.miInventario.delete(id_sniim);
+          if (seleccionCatalogo && seleccionCatalogo.id_sniim === id_sniim) {
+            seleccionCatalogo = null;
+            limpiarCamposInv();
+            const selActualEl = document.getElementById("catalogoSeleccionActual");
+            if (selActualEl) selActualEl.innerHTML = `<span class="muted">Ningún producto seleccionado todavía.</span>`;
+            const sugEl = document.getElementById("catalogoSugerencias");
+            if (sugEl) sugEl.innerHTML = "";
+            document.querySelectorAll(".catalogo-item.selected").forEach((n) => n.classList.remove("selected"));
+          }
+          actualizarMiInventarioUI();
+          guardarEstado();
+        });
+      }
+      cont.appendChild(row);
+    });
+  actualizarPanelInventario();
+}
+
+function actualizarMiOrdenUI() {
+  const cont = document.getElementById("miOrdenLista");
+  if (estado.miOrden.size === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Todavía no agregaste ningún producto a la orden.
+      Elegí uno del catálogo y completá cantidad y precio.</p>`;
+    return;
+  }
+  cont.innerHTML = "";
+  const idSeleccionadoActual = seleccionCatalogo ? seleccionCatalogo.id_sniim : null;
+  let totalOrden = 0;
+  [...estado.miOrden.entries()]
+    .sort((a, b) => b[1].actualizadoEn - a[1].actualizadoEn)
+    .forEach(([id_sniim, item]) => {
+      const subtotal = Math.round(item.cantidad_acordada_kg * item.precio_acordado_mxn_kg * 100) / 100;
+      totalOrden += subtotal;
+      const esElActivo = id_sniim === idSeleccionadoActual;
+      const row = document.createElement("div");
+      row.className = "inv-item" + (esElActivo ? " inv-item-activo" : "");
+      row.innerHTML = `
+        <div class="inv-item-info">
+          <span class="badge OC">${id_sniim}</span> <span class="nombre">${item.producto}</span>
+          ${esElActivo ? '<span class="inv-item-activo-tag">posicionado aquí</span>' : ""}<br>
+          <span class="detalle">${item.cantidad_acordada_kg} kg × ${item.precio_acordado_mxn_kg} MXN/kg = ${subtotal.toFixed(2)} MXN ·
+            actualizado ${new Date(item.actualizadoEn).toLocaleString()}</span>
+        </div>
+        <div class="inv-item-acciones">
+          <button type="button" class="secondary small" data-accion="editar">Editar</button>
+          <button type="button" class="danger small" data-accion="eliminar" ${esElActivo ? "" : "disabled"}
+            title="${esElActivo ? "Eliminar este producto" : "Elegí este producto en el catálogo (arriba) para poder eliminarlo"}">Eliminar</button>
+        </div>`;
+      row.querySelector('[data-accion="editar"]').addEventListener("click", () => {
+        const accion = () => {
+          document.getElementById("tipoPaquete").value = "OC";
+          estado._preseleccionarIdSniim = id_sniim;
+          renderFormulario();
+          document.getElementById("camposFormulario").scrollIntoView({ behavior: "smooth", block: "start" });
+        };
+        if (esElActivo) accion();
+        else intentarCambiarProducto(accion);
+      });
+      const btnEliminar = row.querySelector('[data-accion="eliminar"]');
+      if (esElActivo) {
+        btnEliminar.addEventListener("click", () => {
+          estado.miOrden.delete(id_sniim);
+          if (seleccionCatalogo && seleccionCatalogo.id_sniim === id_sniim) {
+            seleccionCatalogo = null;
+            limpiarCamposOc();
+            const selActualEl = document.getElementById("catalogoSeleccionActual");
+            if (selActualEl) selActualEl.innerHTML = `<span class="muted">Ningún producto seleccionado todavía.</span>`;
+            const sugEl = document.getElementById("catalogoSugerencias");
+            if (sugEl) sugEl.innerHTML = "";
+            document.querySelectorAll(".catalogo-item.selected").forEach((n) => n.classList.remove("selected"));
+          }
+          actualizarMiOrdenUI();
+          guardarEstado();
+        });
+      }
+      cont.appendChild(row);
+    });
+
+  const totalDiv = document.createElement("div");
+  totalDiv.className = "kv";
+  totalDiv.style.cssText = "margin-top:10px; padding-top:10px; border-top:1px solid var(--line);";
+  totalDiv.innerHTML = `<b>Total de la orden:</b> ${(Math.round(totalOrden * 100) / 100).toFixed(2)} MXN`;
+  cont.appendChild(totalDiv);
+}
+
+function leerPayloadDelFormulario(tipo) {
+  const payload = {};
+  for (const campo of CAMPOS[tipo]) {
+    if (campo.type === "catalogo") {
+      if (!seleccionCatalogo) throw new Error(`Elegí un producto del catálogo SNIIM`);
+      payload.producto = seleccionCatalogo.producto;
+      payload.id_sniim = seleccionCatalogo.id_sniim;
+      continue;
+    }
+    const el = document.getElementById("f_" + campo.id);
+    let val = el.value;
+    if (campo.type === "number") {
+      if (val === "") {
+        if (campo.required === false) { payload[campo.id] = null; continue; }
+        throw new Error(`Falta "${campo.label}"`);
+      }
+      val = parseFloat(val);
+    } else {
+      if (!val) {
+        if (campo.required === false) { payload[campo.id] = ""; continue; }
+        throw new Error(`Falta "${campo.label}"`);
+      }
+    }
+    payload[campo.id] = val;
+  }
+  if (tipo === "CE") return construirPayloadCE(payload.id_orden_ref, [
+    { id_sniim: payload.id_sniim, producto: payload.producto, cantidad_kg: payload.cantidad_recibida_kg },
+  ], payload.calidad_observada, payload.evidencia_hash, payload.geolocalizacion);
+  if (tipo === "CR") return construirPayloadCR(payload.id_ce_ref, [
+    { id_sniim: payload.id_sniim, producto: payload.producto, cantidad_kg: payload.cantidad_recibida_kg },
+  ], payload.calidad_observada, payload.evidencia_hash, payload.geolocalizacion);
+  return payload;
+}
+
+// Arma el payload CE en su forma final (siempre productos:[...], aunque
+// sea uno solo) — mismo criterio que INV/OC: una sola confirmación puede
+// cubrir varios productos de la misma entrega.
+function construirPayloadCE(idOrdenRef, items, calidadObservada, evidenciaHash, geolocalizacion) {
+  const productos = items.map((it) => ({ id_sniim: it.id_sniim, producto: it.producto, cantidad_kg: it.cantidad_kg }));
+  return {
+    id_orden_ref: idOrdenRef,
+    productos,
+    calidad_observada: calidadObservada,
+    evidencia_hash: evidenciaHash,
+    geolocalizacion,
+    nonce_uso_unico: nuevoNonce(),
+  };
+}
+
+// Devuelve la lista de productos de un envelope CE, sea del formato nuevo
+// (payload.productos = [...]) o del formato anterior (un solo producto
+// plano con cantidad_recibida_kg) — para no romper la lectura de QR-CE viejos.
+function productosDeEnvelopeCE(envelope) {
+  if (envelope.tipo !== "CE") return [];
+  if (Array.isArray(envelope.payload.productos)) return envelope.payload.productos;
+  if (envelope.payload.producto || envelope.payload.id_sniim) {
+    return [{ id_sniim: envelope.payload.id_sniim, producto: envelope.payload.producto, cantidad_kg: envelope.payload.cantidad_recibida_kg || 0 }];
+  }
+  return [];
+}
+
+// CR — Confirmación de Recepción: mismo formato que CE (productos con
+// cantidad_kg, calidad/evidencia/geo a nivel de todo el paquete, nonce
+// de un solo uso), pero referencia una CE en vez de una OC, y su efecto
+// en "Confirmar" es SUMAR al inventario en vez de restar.
+function construirPayloadCR(idCeRef, items, calidadObservada, evidenciaHash, geolocalizacion) {
+  const productos = items.map((it) => ({ id_sniim: it.id_sniim, producto: it.producto, cantidad_kg: it.cantidad_kg }));
+  return {
+    id_ce_ref: idCeRef,
+    productos,
+    calidad_observada: calidadObservada,
+    evidencia_hash: evidenciaHash,
+    geolocalizacion,
+    nonce_uso_unico: nuevoNonce(),
+  };
+}
+
+function productosDeEnvelopeCR(envelope) {
+  if (envelope.tipo !== "CR") return [];
+  return Array.isArray(envelope.payload.productos) ? envelope.payload.productos : [];
+}
+
+// Arma el payload OC en su forma final (siempre productos:[...], aunque
+// sea uno solo) — mismo formato tanto si se llenó a mano en "Generar"
+// como si se armó desde "Escanear" eligiendo cantidades de un inventario.
+function construirPayloadOC(idInventarioRef, items, compradorId) {
+  const productos = items.map((it) => {
+    const subtotal = Math.round(it.cantidad_kg * it.precio_mxn_kg * 100) / 100;
+    return { id_sniim: it.id_sniim, producto: it.producto, cantidad_kg: it.cantidad_kg, precio_mxn_kg: it.precio_mxn_kg, subtotal_mxn: subtotal };
+  });
+  const total_mxn = Math.round(productos.reduce((acc, p) => acc + p.subtotal_mxn, 0) * 100) / 100;
+  return { id_inventario_ref: idInventarioRef, productos, total_mxn, comprador_id: compradorId };
+}
+
+// Devuelve la lista de productos de un envelope OC, sea del formato nuevo
+// (payload.productos = [...]) o del formato anterior (un solo producto
+// plano) — para no romper la lectura de QR-OC viejos.
+function productosDeEnvelopeOC(envelope) {
+  if (envelope.tipo !== "OC") return [];
+  if (Array.isArray(envelope.payload.productos)) return envelope.payload.productos;
+  if (envelope.payload.producto || envelope.payload.id_sniim) {
+    const cantidad = envelope.payload.cantidad_acordada_kg || 0;
+    const precio = envelope.payload.precio_acordado_mxn_kg || 0;
+    return [{
+      id_sniim: envelope.payload.id_sniim, producto: envelope.payload.producto,
+      cantidad_kg: cantidad, precio_mxn_kg: precio, subtotal_mxn: Math.round(cantidad * precio * 100) / 100,
+    }];
+  }
+  return [];
+}
+
+// Corrección #1: re-valida en silencio; si el formulario ya es válido,
+// borra el mensaje de error de "Firmar y generar QR" sin que el usuario
+// tenga que volver a tocar el botón.
+// Válida el formulario actual SIN efectos secundarios (no guarda nada);
+// devuelve null si ya se podría generar, o un mensaje si todavía falta algo.
+// Para INV replica la misma regla que usa el botón de generar: hace falta
+// o bien un producto activo con todos sus campos completos, o bien ya
+// tener al menos uno guardado en "Mi inventario".
+function validarFormularioActual(tipo) {
+  if (tipo !== "INV" && tipo !== "OC") {
+    try { leerPayloadDelFormulario(tipo); return null; }
+    catch (e) { return e.message; }
+  }
+  const mapa = tipo === "INV" ? estado.miInventario : estado.miOrden;
+  const lector = tipo === "INV" ? leerCamposInvActuales : leerCamposOcActuales;
+  let quedariaGuardado = mapa.size;
+  if (seleccionCatalogo) {
+    const { llenos, total, existe } = lector();
+    if (existe && llenos > 0 && llenos < total) {
+      return `Faltan campos del producto actual ("${seleccionCatalogo.producto}").`;
+    }
+    if (existe && llenos === total) quedariaGuardado = Math.max(quedariaGuardado, 1);
+  }
+  if (quedariaGuardado === 0) return tipo === "INV"
+    ? `No tenés ningún producto guardado todavía.`
+    : `Todavía no agregaste ningún producto a la orden.`;
+  return null;
+}
+
+function revisarErrorGenerarResuelto() {
+  const msg = document.getElementById("msgGenerar");
+  if (!msg || !msg.querySelector(".msg.err")) return; // no hay error mostrado, nada que limpiar
+  const tipo = document.getElementById("tipoPaquete").value;
+  if (validarFormularioActual(tipo) === null) msg.innerHTML = ""; // ya no falta nada: el error desaparece
+}
+
+// Firma, codifica, fragmenta y dibuja el/los QR de un paquete — usado
+// tanto por "Firmar y generar QR" (pestaña Generar) como por "Generar
+// orden de compra" (pestaña Escanear), para que ambos caminos produzcan
+// paquetes idénticos en formato.
+const VERSION_ESQUEMA_POR_TIPO = { INV: 2, OC: 2, CE: 2, CR: 1 }; // CR nace ya en formato lista; no listados = 1
+
+// Codifica, fragmenta y dibuja el/los QR de un envelope YA firmado — sin
+// reconstruirlo ni volver a firmarlo. La usa generarPaqueteQr() para un
+// envelope recién creado, y también la confirmación de CE para mostrar
+// el QR final de un envelope editado localmente (cantidades corregidas,
+// líneas eliminadas) y re-firmado.
+// Re-firma un envelope después de editarlo localmente (cambiar una
+// cantidad, quitar una línea de producto). Usa la llave del MISMO emisor
+// que ya tenía el paquete — quien lo generó originalmente es quien puede
+// corregirlo antes de confirmarlo.
+async function refirmarEnvelope(envelope) {
+  const sinFirma = { ...envelope };
+  delete sinFirma.firma;
+  const llave = await derivarLlave(envelope.emisor_id);
+  envelope.firma = await firmarHex(llave, canonicalStringify(sinFirma));
+}
+
+// Calcula el ancho en píxeles que necesita el QR según cuántos módulos
+// tenga (que depende del largo del contenido) — en vez de un tamaño fijo.
+// Un QR con un texto largo puede necesitar 80-150 módulos por lado; a un
+// tamaño fijo de 260px eso deja cada módulo en 2-3px, demasiado chico
+// para que un lector de cámara o una foto recomprimida (WhatsApp, etc.)
+// lo distinga de forma confiable. Apuntamos a ~8px por módulo (mismo
+// criterio que usa el prototipo en Python con box_size=8), con un piso
+// de 260px para que los QR chicos no se vean minúsculos en pantalla.
+function anchoQrPx(texto, pxPorModulo = 8, minimo = 260) {
+  try {
+    const datosQr = QRCode.create(texto, { errorCorrectionLevel: "H" });
+    const modulosPorLado = datosQr.modules.size + 2 * 2; // +márgen de 2 módulos por lado (mismo "margin: 2" que usa toCanvas)
+    return Math.max(minimo, modulosPorLado * pxPorModulo);
+  } catch (e) {
+    return minimo; // si algo falla al estimar, cae al tamaño fijo de siempre
+  }
+}
+
+// Colores de fondo y texto por tipo de paquete: amarillo=OC, azul=CR,
+// verde=CE, INV sin color (usa un tono neutro solo para que las barras
+// de cabecera/pie no queden invisibles sobre fondo blanco).
+const COLOR_FONDO_POR_TIPO = { OC: "#F2C94C", CR: "#5B9BE0", CE: "#5FBE7E", INV: "#EDEAE0" };
+const COLOR_TEXTO_POR_TIPO = { OC: "#5C4400", CR: "#0B2C52", CE: "#0E3D1E", INV: "#55503f" };
+
+// Título y "3 pasos sencillos" según el tipo de paquete — para que quien
+// reciba el QR (sin conocer la app) sepa qué hacer con él con solo mirarlo.
+const GUIA_POR_TIPO = {
+  INV: {
+    titulo: "Cómo usar este Inventario",
+    pasos: [
+      "Escaneá este QR con la app Maximax.",
+      "Elegí cuánto necesitás de cada producto.",
+      "Generá tu orden de compra (OC) y enviásela al productor.",
+    ],
+  },
+  OC: {
+    titulo: "Cómo usar esta Orden de Compra",
+    pasos: [
+      "Escaneá este QR con la app Maximax.",
+      "Revisá las coincidencias contra tu inventario.",
+      "Generá la confirmación de entrega (CE) y confirmala en Panel.",
+    ],
+  },
+  CE: {
+    titulo: "Cómo usar esta Confirmación de Entrega",
+    pasos: [
+      "Escaneá este QR con la app Maximax.",
+      "Ajustá la cantidad si recibiste menos de lo esperado.",
+      "Generá tu confirmación de recepción (CR) — se suma sola a tu inventario.",
+    ],
+  },
+  CR: {
+    titulo: "Confirmación de Recepción",
+    pasos: [
+      "Este código certifica la recepción de los productos.",
+      "Ya se sumaron a tu inventario en Maximax.",
+      "Guardalo como comprobante — no hace falta volver a escanearlo.",
+    ],
+  },
+};
+
+// Dibuja el logo "mora" de Maximax (mismo diseño que el ícono de la
+// cabecera de la app) centrado en (cx, cy), escalado a `tamano` px.
+// Si `conFondo` es true, agrega un círculo blanco detrás para que se
+// note incluso encima del propio QR.
+function dibujarLogoMaximax(ctx, cx, cy, tamano, conFondo) {
+  if (conFondo) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, tamano * 0.62, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.restore();
+  }
+  const s = tamano / 40; // el diseño original está pensado para un viewBox de 40x40
+  ctx.save();
+  ctx.translate(cx - 20 * s, cy - 20 * s);
+  ctx.scale(s, s);
+  const drupa = (x, y, r, color) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); };
+  ctx.beginPath(); ctx.moveTo(20, 10); ctx.bezierCurveTo(19, 6, 21, 3, 25, 2); ctx.bezierCurveTo(24, 5, 22, 7, 20, 10); ctx.closePath();
+  ctx.fillStyle = "#3E7C4A"; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(20, 10); ctx.bezierCurveTo(18, 7, 15, 6, 12, 7); ctx.bezierCurveTo(14, 9, 17, 10, 20, 10); ctx.closePath();
+  ctx.fillStyle = "#4d9457"; ctx.fill();
+  drupa(20, 13.5, 4.6, "#8a3f82"); drupa(13.5, 17.5, 4.6, "#6b2a63"); drupa(26.5, 17.5, 4.6, "#6b2a63");
+  drupa(10.5, 25, 4.4, "#4a1942"); drupa(20, 24, 5, "#7a3572"); drupa(29.5, 25, 4.4, "#4a1942"); drupa(20, 32, 4.4, "#4a1942");
+  ctx.restore();
+}
+
+// Envuelve un texto a varias líneas para que quepa en maxWidth, usando
+// la fuente ya asignada al contexto (ctx.font).
+function envolverTexto(ctx, texto, maxWidth) {
+  const palabras = texto.split(" ");
+  const lineas = [];
+  let actual = "";
+  for (const palabra of palabras) {
+    const prueba = actual ? actual + " " + palabra : palabra;
+    if (ctx.measureText(prueba).width > maxWidth && actual) {
+      lineas.push(actual);
+      actual = palabra;
+    } else {
+      actual = prueba;
+    }
+  }
+  if (actual) lineas.push(actual);
+  return lineas;
+}
+
+// Aclara un color hex mezclándolo con blanco (factor 0 = color
+// original, 1 = blanco puro) — para la barra de cabecera.
+function aclararColor(hex, factor) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const mezclar = (c) => Math.round(c + (255 - c) * factor);
+  return `rgb(${mezclar(r)},${mezclar(g)},${mezclar(b)})`;
+}
+
+// Arma la tarjeta completa alrededor del QR ya dibujado (offscreen):
+// barra superior, título + 3 pasos según el tipo de paquete, el QR con
+// el logo de Maximax al centro, un divisor, tres datos (fecha de
+// creación, ID del usuario, código UUID) y una barra inferior. Todo el
+// texto y el logo quedan siempre AFUERA del propio QR (nunca tapan sus
+// módulos, salvo el logo central que va sobre la zona que el nivel de
+// corrección de errores H puede perder sin problema) — se verificó con
+// tres decodificadores distintos, incluida la copia real de ZXing que
+// usa la app, antes de implementarlo.
+function dibujarTarjetaQr(canvasFinal, qrCanvasOffscreen, envelope) {
+  const tipo = envelope.tipo;
+  const guia = GUIA_POR_TIPO[tipo] || GUIA_POR_TIPO.INV;
+  const colorAcento = COLOR_FONDO_POR_TIPO[tipo] || "#EDEAE0";
+  const colorTexto = COLOR_TEXTO_POR_TIPO[tipo] || "#55503f";
+
+  const anchoQr = qrCanvasOffscreen.width;
+  const padLateral = 22;
+  const anchoCard = anchoQr + padLateral * 2;
+  const medir = document.createElement("canvas").getContext("2d");
+
+  medir.font = "12.5px sans-serif";
+  const maxAnchoPaso = anchoCard - padLateral * 2 - 20;
+  const lineasPorPaso = guia.pasos.map((paso) => envolverTexto(medir, paso, maxAnchoPaso));
+  const altoLineaPaso = 16;
+  const alturaPasos = lineasPorPaso.reduce((acc, lineas) => acc + lineas.length * altoLineaPaso + 6, 0);
+
+  medir.font = "bold 17px sans-serif";
+  const lineasTitulo = envolverTexto(medir, guia.titulo, anchoCard - padLateral * 2);
+  const alturaTitulo = lineasTitulo.length * 21;
+
+  const alturaHeaderBar = 28;
+  const gapChico = 8;
+  const gapMediano = 16;
+  const alturaFilaInfo = 26;
+  const alturaFooterBar = 36;
+
+  const yTitulo = alturaHeaderBar + gapMediano;
+  const yPasos = yTitulo + alturaTitulo + gapChico;
+  const yQr = yPasos + alturaPasos + gapMediano;
+  const yDivisor = yQr + qrCanvasOffscreen.height + gapMediano;
+  const yInfo = yDivisor + 1 + gapMediano;
+  const yFooter = yInfo + alturaFilaInfo * 3 + gapChico;
+  const alturaTotal = yFooter + alturaFooterBar;
+
+  canvasFinal.width = anchoCard;
+  canvasFinal.height = alturaTotal;
+  const ctx = canvasFinal.getContext("2d");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, anchoCard, alturaTotal);
+
+  // Barra superior
+  ctx.fillStyle = aclararColor(colorAcento, 0.55);
+  ctx.fillRect(0, 0, anchoCard, alturaHeaderBar);
+  ctx.fillStyle = "#55503f";
+  ctx.font = "10.5px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("MAXIMAX · Paquete firmado sin conexión", anchoCard / 2, alturaHeaderBar / 2 + 1);
+
+  // Título
+  ctx.fillStyle = colorTexto;
+  ctx.font = "bold 17px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  lineasTitulo.forEach((l, i) => ctx.fillText(l, anchoCard / 2, yTitulo + 15 + i * 21));
+
+  // Los 3 pasos, numerados
+  let yPasoActual = yPasos;
+  guia.pasos.forEach((_, idx) => {
+    const lineas = lineasPorPaso[idx];
+    ctx.textAlign = "left";
+    ctx.fillStyle = colorTexto;
+    ctx.font = "bold 12.5px sans-serif";
+    ctx.fillText(`${idx + 1}.`, padLateral, yPasoActual + 11);
+    ctx.font = "12.5px sans-serif";
+    ctx.fillStyle = "#3a362b";
+    lineas.forEach((l, li) => ctx.fillText(l, padLateral + 18, yPasoActual + 11 + li * altoLineaPaso));
+    yPasoActual += lineas.length * altoLineaPaso + 6;
+  });
+
+  // QR + logo Maximax al centro
+  ctx.drawImage(qrCanvasOffscreen, padLateral, yQr);
+  dibujarLogoMaximax(ctx, padLateral + anchoQr / 2, yQr + qrCanvasOffscreen.height / 2, anchoQr * 0.16, true);
+
+  // Divisor
+  ctx.strokeStyle = "#e5e0d3";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padLateral, yDivisor);
+  ctx.lineTo(anchoCard - padLateral, yDivisor);
+  ctx.stroke();
+
+  // Fecha de creación / ID del usuario / Código UUID
+  const fechaCreacion = new Date(envelope.timestamp_emisor * 1000).toLocaleDateString();
+  const filas = [
+    ["Fecha de creación:", fechaCreacion],
+    ["ID del usuario:", envelope.emisor_id],
+    ["Código UUID:", envelope.id_transaccion],
+  ];
+  ctx.font = "bold 12px sans-serif";
+  const anchoMaxLabel = Math.max(...filas.map(([label]) => ctx.measureText(label).width));
+  const xValor = padLateral + anchoMaxLabel + 12;
+  let yFilaActual = yInfo;
+  ctx.textBaseline = "middle";
+  filas.forEach(([label, valor]) => {
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#55503f";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText(label, padLateral, yFilaActual + alturaFilaInfo / 2);
+    ctx.fillStyle = "#222";
+    ctx.font = "12px sans-serif";
+    let valorMostrado = String(valor);
+    const maxAnchoValor = anchoCard - xValor - padLateral;
+    while (ctx.measureText(valorMostrado).width > maxAnchoValor && valorMostrado.length > 4) {
+      valorMostrado = valorMostrado.slice(0, -2);
+    }
+    if (valorMostrado !== String(valor)) valorMostrado += "…";
+    ctx.fillText(valorMostrado, xValor, yFilaActual + alturaFilaInfo / 2);
+    yFilaActual += alturaFilaInfo;
+  });
+
+  // Barra inferior
+  ctx.fillStyle = colorAcento;
+  ctx.fillRect(0, yFooter, anchoCard, alturaFooterBar);
+  dibujarLogoMaximax(ctx, padLateral + 6, yFooter + alturaFooterBar / 2, 15, false);
+  ctx.fillStyle = colorTexto;
+  ctx.font = "bold 11.5px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Generado con Maximax", anchoCard / 2 + 10, yFooter + alturaFooterBar / 2);
+}
+
+function renderizarQrDeEnvelope(envelope, contenedorSalida, contenedorMensaje, descripcionExtra = "") {
+  const jsonCompleto = canonicalStringify(envelope);
+  const b45 = codificarTransporte(jsonCompleto);
+  const fragmentos = fragmentar(b45);
+
+  contenedorMensaje.innerHTML = `<div class="msg ok">${descripcionExtra}Paquete ${envelope.tipo} firmado y codificado
+    (${jsonCompleto.length} bytes JSON → ${b45.length} caracteres Base45
+    ${fragmentos.length > 1 ? `→ ${fragmentos.length} QR encadenados` : "→ 1 QR"}).</div>`;
+
+  const grid = document.createElement("div");
+  grid.className = "qrgrid";
+  for (let idx = 0; idx < fragmentos.length; idx++) {
+    const card = document.createElement("div");
+    card.className = "qrcard";
+    const canvas = document.createElement("canvas");
+    card.appendChild(canvas);
+    const lbl = document.createElement("div");
+    lbl.className = "lbl";
+    lbl.textContent = fragmentos.length > 1 ? `parte ${idx + 1}/${fragmentos.length}` : envelope.id_transaccion;
+    card.appendChild(lbl);
+    grid.appendChild(card);
+
+    // Se dibuja primero en un canvas aparte (nunca se muestra ni se
+    // agrega al documento) y recién después se compone, con la tarjeta
+    // completa, en el canvas visible/descargable — así el propio motor
+    // de qrcode.js nunca dibuja sobre un canvas más grande de lo que
+    // espera. margin:4 (zona de silencio completa del estándar).
+    const qrOffscreen = document.createElement("canvas");
+    // eslint-disable-next-line no-loop-func
+    QRCode.toCanvas(qrOffscreen, fragmentos[idx], { errorCorrectionLevel: "H", margin: 4, width: anchoQrPx(fragmentos[idx]) }, (err) => {
+      if (err) { lbl.textContent = "Error generando QR: " + err.message; return; }
+      dibujarTarjetaQr(canvas, qrOffscreen, envelope);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `maximax_${envelope.tipo}_${envelope.id_transaccion}${fragmentos.length > 1 ? "_p" + (idx + 1) : ""}.png`;
+      a.textContent = "Descargar PNG";
+      card.appendChild(a);
+    });
+  }
+  contenedorSalida.appendChild(grid);
+
+  const det = document.createElement("details");
+  det.className = "raw";
+  det.innerHTML = `<summary>Ver JSON firmado</summary><pre>${jsonCompleto.replace(/</g, "&lt;")}</pre>`;
+  contenedorSalida.appendChild(det);
+}
+
+// Construye y firma un envelope nuevo (sin dibujar ningún QR todavía).
+// Lo usan tanto generarPaqueteQr() como el flujo de CE, que ahora guarda
+// la CE firmada en la cola pero no muestra su QR hasta confirmarla.
+async function firmarNuevoEnvelope(tipo, payload) {
+  if (!estado.miActorId) return null;
+  const envelope = {
+    tipo,
+    id_transaccion: nuevoId(),
+    version_esquema: VERSION_ESQUEMA_POR_TIPO[tipo] || 1,
+    emisor_id: estado.miActorId,
+    timestamp_emisor: Math.floor(Date.now() / 1000),
+    payload,
+    firma: "",
+  };
+  const sinFirma = { ...envelope }; delete sinFirma.firma;
+  const llave = await derivarLlave(estado.miActorId);
+  envelope.firma = await firmarHex(llave, canonicalStringify(sinFirma));
+  return envelope;
+}
+
+async function generarPaqueteQr({ tipo, payload, contenedorSalida, contenedorMensaje, descripcionExtra = "" }) {
+  const envelope = await firmarNuevoEnvelope(tipo, payload);
+  if (!envelope) {
+    contenedorMensaje.innerHTML = `<div class="msg err">Primero definí tu identidad en la pestaña "Identidad".</div>`;
+    return null;
+  }
+  renderizarQrDeEnvelope(envelope, contenedorSalida, contenedorMensaje, descripcionExtra);
+  return envelope;
+}
+
+// Firma una CE y la deja guardada en la cola local SIN generar su QR
+// todavía — el QR de una CE solo se produce al confirmarla (Panel → CE
+// pendientes), que es cuando de verdad se descuenta del inventario.
+async function guardarCeSinQr({ payload, contenedorMensaje, descripcionExtra = "" }) {
+  const envelope = await firmarNuevoEnvelope("CE", payload);
+  if (!envelope) {
+    contenedorMensaje.innerHTML = `<div class="msg err">Primero definí tu identidad en la pestaña "Identidad".</div>`;
+    return null;
+  }
+  contenedorMensaje.innerHTML = `<div class="msg ok">${descripcionExtra}Guardada en tu histórico, todavía sin
+    confirmar. Andá a Panel → CE pendientes para revisarla, confirmarla y ahí se genera su QR.</div>`;
+  return envelope;
+}
+
+// Mismo criterio que la CE, pero para CR: nunca genera QR — ni al
+// crearla (acá) ni al confirmarla (Panel → CR pendientes) — porque no
+// hay ningún paso siguiente que dependa de escanearla.
+async function guardarCrSinQr({ payload, contenedorMensaje, descripcionExtra = "" }) {
+  const envelope = await firmarNuevoEnvelope("CR", payload);
+  if (!envelope) {
+    contenedorMensaje.innerHTML = `<div class="msg err">Primero definí tu identidad en la pestaña "Identidad".</div>`;
+    return null;
+  }
+  contenedorMensaje.innerHTML = `<div class="msg ok">${descripcionExtra}Guardada en tu histórico. Sumá el
+    inventario desde Panel → CR pendientes.</div>`;
+  return envelope;
+}
+
+document.getElementById("btnGenerar").addEventListener("click", async () => {
+  const msg = document.getElementById("msgGenerar");
+  const out = document.getElementById("resultadoQr");
+  out.innerHTML = ""; msg.innerHTML = "";
+
+  if (!estado.miActorId) {
+    msg.innerHTML = `<div class="msg err">Primero definí tu identidad en la pestaña "Identidad".</div>`;
+    return;
+  }
+  const tipo = document.getElementById("tipoPaquete").value;
+  let payload;
+  let descripcionExtra = "";
+
+  if (tipo === "INV") {
+    // Si hay un producto activo en el formulario, guardarlo/actualizarlo
+    // primero (igual que antes) — pero el QR-INV empaqueta TODO lo que
+    // haya en "Mi inventario guardado", no solo el que está en pantalla.
+    if (seleccionCatalogo) {
+      const { valores, llenos, total, existe } = leerCamposInvActuales();
+      if (existe && llenos > 0 && llenos < total) {
+        msg.innerHTML = `<div class="msg err">Faltan campos del producto actual
+          ("${seleccionCatalogo.producto}"). Completalos, o tocá "Quitar" en el
+          catálogo si querés generar solo con lo que ya tenías guardado.</div>`;
+        return;
+      }
+      if (existe && llenos === total) {
+        estado.miInventario.set(seleccionCatalogo.id_sniim, {
+          producto: seleccionCatalogo.producto,
+          id_sniim: seleccionCatalogo.id_sniim,
+          cantidad_kg: parseFloat(valores.cantidad_kg),
+          calidad: valores.calidad,
+          precio_referencia_mxn_kg: parseFloat(valores.precio_referencia_mxn_kg),
+          disponible_desde: valores.disponible_desde,
+          actualizadoEn: Date.now(),
+        });
+        actualizarMiInventarioUI();
+        guardarEstado();
+      }
+    }
+    if (estado.miInventario.size === 0) {
+      msg.innerHTML = `<div class="msg err">No tenés ningún producto guardado todavía.
+        Elegí uno del catálogo SNIIM y completá sus datos.</div>`;
+      return;
+    }
+    const productos = [...estado.miInventario.values()].map((p) => ({
+      id_sniim: p.id_sniim,
+      producto: p.producto,
+      cantidad_kg: p.cantidad_kg,
+      calidad: p.calidad,
+      precio_referencia_mxn_kg: p.precio_referencia_mxn_kg,
+      disponible_desde: p.disponible_desde,
+    }));
+    payload = { productos };
+    descripcionExtra = `Inventario con ${productos.length} producto${productos.length === 1 ? "" : "s"}. `;
+  } else if (tipo === "OC") {
+    // Igual que INV: guardar/actualizar el producto activo primero, y el
+    // QR-OC junta TODO lo que haya en "Mi orden de compra".
+    if (seleccionCatalogo) {
+      const { valores, llenos, total, existe } = leerCamposOcActuales();
+      if (existe && llenos > 0 && llenos < total) {
+        msg.innerHTML = `<div class="msg err">Faltan campos del producto actual
+          ("${seleccionCatalogo.producto}"). Completalos, o tocá "Quitar" en el
+          catálogo si querés generar solo con lo que ya tenías en la orden.</div>`;
+        return;
+      }
+      if (existe && llenos === total) {
+        estado.miOrden.set(seleccionCatalogo.id_sniim, {
+          producto: seleccionCatalogo.producto,
+          id_sniim: seleccionCatalogo.id_sniim,
+          cantidad_acordada_kg: parseFloat(valores.cantidad_acordada_kg),
+          precio_acordado_mxn_kg: parseFloat(valores.precio_acordado_mxn_kg),
+          actualizadoEn: Date.now(),
+        });
+        actualizarMiOrdenUI();
+        guardarEstado();
+      }
+    }
+    if (estado.miOrden.size === 0) {
+      msg.innerHTML = `<div class="msg err">Todavía no agregaste ningún producto a la orden.
+        Elegí uno del catálogo SNIIM y completá cantidad y precio.</div>`;
+      return;
+    }
+    const compradorEl = document.getElementById("f_comprador_id");
+    const items = [...estado.miOrden.values()].map((p) => ({
+      id_sniim: p.id_sniim, producto: p.producto,
+      cantidad_kg: p.cantidad_acordada_kg, precio_mxn_kg: p.precio_acordado_mxn_kg,
+    }));
+    payload = construirPayloadOC("", items, compradorEl.value.trim() || estado.miActorId);
+    descripcionExtra = `Orden de compra con ${items.length} producto${items.length === 1 ? "" : "s"} · total ${payload.total_mxn} MXN. `;
+  } else {
+    try { payload = leerPayloadDelFormulario(tipo); }
+    catch (e) { msg.innerHTML = `<div class="msg err">${e.message}</div>`; return; }
+    if (tipo === "CE" && yaTieneCEGenerada(payload.id_orden_ref)) {
+      msg.innerHTML = `<div class="msg err">Ya generaste una confirmación de entrega para la orden
+        ${payload.id_orden_ref} — no se puede generar otra.</div>`;
+      return;
+    }
+    if (tipo === "CR" && yaTieneCRGenerada(payload.id_ce_ref)) {
+      msg.innerHTML = `<div class="msg err">Ya generaste una confirmación de recepción para la entrega
+        ${payload.id_ce_ref} — no se puede generar otra.</div>`;
+      return;
+    }
+  }
+
+  if (tipo === "CE") {
+    // La CE no muestra su QR al crearla — se guarda pendiente en la cola
+    // local, y el QR recién se genera al confirmarla (Panel → CE
+    // pendientes), que es cuando de verdad se descuenta el inventario.
+    out.innerHTML = "";
+    const envelopeCE = await guardarCeSinQr({ payload, contenedorMensaje: msg, descripcionExtra });
+    if (envelopeCE) {
+      const claveDedupe = envelopeCE.tipo + "|" + envelopeCE.id_transaccion;
+      estado.vistos.add(claveDedupe);
+      estado.noncesConsumidos.add(payload.nonce_uso_unico);
+      estado.colaLocal.push({
+        tipo: envelopeCE.tipo,
+        id_transaccion: envelopeCE.id_transaccion,
+        emisor_id: envelopeCE.emisor_id,
+        envelope: envelopeCE,
+        sincronizado: false,
+        recibidoEn: Date.now(),
+      });
+      actualizarHistorico();
+      guardarEstado();
+      msg.innerHTML += `<div class="msg ok">Agregada a tu cola local.</div>`;
+      renderFormulario(); // limpia el formulario para la siguiente CE — a diferencia de INV, acá no se conserva
+    }
+    return;
+  }
+
+  if (tipo === "CR") {
+    // Mismo criterio que CE: la CR armada a mano tampoco muestra QR al
+    // crearla — queda pendiente en la cola local, y "Confirmar y sumar
+    // al inventario" (Panel → CR pendientes) tampoco genera QR (no hace
+    // falta ninguno para este tipo de paquete).
+    out.innerHTML = "";
+    const envelopeCR = await guardarCrSinQr({ payload, contenedorMensaje: msg, descripcionExtra });
+    if (envelopeCR) {
+      const claveDedupe = envelopeCR.tipo + "|" + envelopeCR.id_transaccion;
+      estado.vistos.add(claveDedupe);
+      estado.noncesConsumidos.add(payload.nonce_uso_unico);
+      estado.colaLocal.push({
+        tipo: envelopeCR.tipo,
+        id_transaccion: envelopeCR.id_transaccion,
+        emisor_id: envelopeCR.emisor_id,
+        envelope: envelopeCR,
+        sincronizado: false,
+        recibidoEn: Date.now(),
+      });
+      actualizarHistorico();
+      guardarEstado();
+      msg.innerHTML += `<div class="msg ok">Agregada a tu cola local.</div>`;
+      renderFormulario(); // limpia el formulario para la siguiente CR — a diferencia de INV, acá no se conserva
+    }
+    return;
+  }
+
+  const envelopeFinal = await generarPaqueteQr({ tipo, payload, contenedorSalida: out, contenedorMensaje: msg, descripcionExtra });
+  // INV es la excepción: su información (Mi inventario guardado, el
+  // formulario) siempre queda visible para poder seguir editándola o
+  // volver a generar. El resto de los paquetes que llegan hasta acá
+  // (por ahora, solo OC) limpian el formulario después de generar.
+  if (envelopeFinal && tipo !== "INV") {
+    if (tipo === "OC") {
+      estado.miOrden = new Map();
+      guardarEstado();
+    }
+    renderFormulario();
+  }
+});
+
+/* =====================================================================
+   TAB: ESCANEAR
+===================================================================== */
+function actualizarEstadoFragmentos() {
+  const cont = document.getElementById("estadoFragmentos");
+  const r = estado.reensamblador;
+  if (r.total === null) { cont.innerHTML = ""; return; }
+  if (r.completo) {
+    cont.innerHTML = `<div class="msg ok">Paquete completo: ${r.total} fragmento(s) recibido(s).</div>`;
+  } else {
+    cont.innerHTML = `<div class="msg warn">Fragmento ${r.partes.size}/${r.total} recibido.
+      Faltan: ${r.faltantes().join(", ")}. Seguí escaneando (en cualquier orden).</div>`;
+  }
+}
+
+// ¿Ya existe, en la cola local, una CR que referencia esta CE? Se usa
+// para no aceptar la misma CE dos veces (por ejemplo, si se borró del
+// histórico y se vuelve a escanear) ni ofrecer generar una segunda CR
+// para la misma entrega.
+function yaTieneCRGenerada(idTransaccionCE) {
+  return estado.colaLocal.some((it) => it.tipo === "CR" && it.envelope.payload.id_ce_ref === idTransaccionCE);
+}
+
+// ¿Ya existe, en la cola local, una CE que referencia esta OC? Evita
+// generar (y duplicar en el histórico) una segunda confirmación de
+// entrega para la misma orden — tanto desde el armado automático al
+// escanear la OC como desde el formulario manual de Generar.
+function yaTieneCEGenerada(idTransaccionOC) {
+  return estado.colaLocal.some((it) => it.tipo === "CE" && it.envelope.payload.id_orden_ref === idTransaccionOC);
+}
+
+async function procesarTextoQr(texto) {
+  const msg = document.getElementById("msgEscaneo");
+  if (texto === estado.ultimoTextoEscaneado) return; // evita reprocesar el mismo frame de cámara
+  estado.ultimoTextoEscaneado = texto;
+
+  try {
+    estado.reensamblador.agregar(texto);
+  } catch (e) {
+    msg.innerHTML = `<div class="msg err">${e.message}</div>`;
+    return;
+  }
+  actualizarEstadoFragmentos();
+  if (!estado.reensamblador.completo) return;
+
+  // Paquete completo: decodificar, verificar firma, deduplicar
+  msg.innerHTML = "";
+  let jsonText, envelope;
+  try {
+    const b45Completo = estado.reensamblador.textoCompleto();
+    jsonText = decodificarTransporte(b45Completo);
+    envelope = JSON.parse(jsonText);
+  } catch (e) {
+    msg.innerHTML = `<div class="msg err">No se pudo decodificar el paquete (¿QR dañado?): ${e.message}</div>`;
+    estado.reensamblador.reset();
+    return;
+  }
+
+  const llave = await derivarLlave(envelope.emisor_id);
+  const sinFirmaText = jsonText.replace(/,"firma":"[0-9a-f]*"/, "").replace(/"firma":"[0-9a-f]*",?/, "");
+  const canon = canonicalizeFromText(sinFirmaText);
+  const firmaOk = await verificarHex(llave, canon, envelope.firma);
+
+  if (!firmaOk) {
+    msg.innerHTML = `<div class="msg err">Firma inválida — posible QR alterado o emisor no reconocido.
+      No se guardó en la cola local.</div>`;
+    estado.reensamblador.reset();
+    return;
+  }
+
+  // Una orden de compra generada por el mismo identificador que la está
+  // escaneando no tiene sentido (no le podés comprar/vender a vos mismo)
+  // — se rechaza antes de guardarla en la cola local.
+  if (envelope.tipo === "OC" && estado.miActorId && envelope.emisor_id === estado.miActorId) {
+    msg.innerHTML = `<div class="msg err">Esta orden de compra la generaste vos mismo
+      (${envelope.emisor_id}) — no se puede aceptar tu propia orden. No se guardó en la cola local.</div>`;
+    estado.reensamblador.reset();
+    return;
+  }
+
+  // Una CE que ya generó su confirmación de recepción antes no se vuelve
+  // a aceptar — sin esto, borrar el CE del histórico y volver a
+  // escanearlo permitiría generar una segunda CR para la misma entrega,
+  // duplicando el ingreso al inventario.
+  if (envelope.tipo === "CE" && yaTieneCRGenerada(envelope.id_transaccion)) {
+    msg.innerHTML = `<div class="msg err">Ya generaste una confirmación de recepción (CR) para esta
+      entrega (${envelope.id_transaccion}) — no se vuelve a aceptar. No se guardó en la cola local.</div>`;
+    estado.reensamblador.reset();
+    return;
+  }
+
+  const claveDedupe = envelope.tipo + "|" + envelope.id_transaccion;
+  if (estado.vistos.has(claveDedupe)) {
+    msg.innerHTML = `<div class="msg warn">Ya tenías este paquete (${envelope.tipo} ${envelope.id_transaccion})
+      en tu cola local — se descarta el duplicado.</div>`;
+    estado.reensamblador.reset();
+    return;
+  }
+  if (envelope.tipo === "CE" || envelope.tipo === "CR") {
+    const nonce = envelope.payload.nonce_uso_unico;
+    if (estado.noncesConsumidos.has(nonce)) {
+      msg.innerHTML = `<div class="msg warn">Nonce de confirmación ya usado en este dispositivo
+        (${nonce}) — se descarta.</div>`;
+      estado.reensamblador.reset();
+      return;
+    }
+    estado.noncesConsumidos.add(nonce);
+  }
+
+  estado.vistos.add(claveDedupe);
+  estado.colaLocal.push({
+    tipo: envelope.tipo,
+    id_transaccion: envelope.id_transaccion,
+    emisor_id: envelope.emisor_id,
+    envelope,
+    sincronizado: false,
+    recibidoEn: Date.now(),
+  });
+  actualizarHistorico();
+  guardarEstado();
+
+  msg.innerHTML = `<div class="msg ok">Paquete <b>${envelope.tipo}</b> validado y guardado en la cola local.</div>`;
+  mostrarUltimoRecibido(envelope);
+  estado.reensamblador.reset();
+  actualizarEstadoFragmentos();
+}
+
+// Devuelve la lista de productos de un envelope INV, sea del formato nuevo
+// (payload.productos = [...]) o del formato anterior (un solo producto
+// plano en payload) — para no romper la lectura de QR-INV viejos.
+function productosDeEnvelopeINV(envelope) {
+  if (envelope.tipo !== "INV") return [];
+  if (Array.isArray(envelope.payload.productos)) return envelope.payload.productos;
+  if (envelope.payload.producto) return [envelope.payload];
+  return [];
+}
+
+function etiquetaPayload(envelope) {
+  const p = envelope.payload;
+  if (envelope.tipo === "INV") {
+    const prods = productosDeEnvelopeINV(envelope);
+    if (prods.length === 0) return "Inventario (sin productos)";
+    if (prods.length === 1) {
+      const u = prods[0];
+      return `${u.producto}${u.id_sniim ? " (" + u.id_sniim + ")" : ""} · ${u.cantidad_kg} kg · ${u.precio_referencia_mxn_kg} MXN/kg`;
+    }
+    return `${prods.length} productos: ${prods.map((u) => u.producto).join(", ")}`;
+  }
+  if (envelope.tipo === "OC") {
+    const prods = productosDeEnvelopeOC(envelope);
+    if (prods.length === 0) return "Orden de compra (sin productos)";
+    const total = envelope.payload.total_mxn ?? prods.reduce((a, x) => a + (x.subtotal_mxn || 0), 0);
+    if (prods.length === 1) return `${prods[0].producto} · ${prods[0].cantidad_kg} kg @ ${prods[0].precio_mxn_kg} MXN/kg · total ${total} MXN`;
+    return `${prods.length} productos · total ${total} MXN`;
+  }
+  if (envelope.tipo === "CE") {
+    const prods = productosDeEnvelopeCE(envelope);
+    if (prods.length === 0) return `Confirmación de entrega (sin productos) · ${p.calidad_observada}`;
+    if (prods.length === 1) return `${prods[0].producto} · ${prods[0].cantidad_kg} kg recibidos · ${p.calidad_observada}`;
+    return `${prods.length} productos recibidos · ${p.calidad_observada}`;
+  }
+  if (envelope.tipo === "CR") {
+    const prods = productosDeEnvelopeCR(envelope);
+    if (prods.length === 0) return `Confirmación de recepción (sin productos) · ${p.calidad_observada}`;
+    if (prods.length === 1) return `${prods[0].producto} · ${prods[0].cantidad_kg} kg a sumar al inventario · ${p.calidad_observada}`;
+    return `${prods.length} productos a sumar al inventario · ${p.calidad_observada}`;
+  }
+  return "";
+}
+
+function mostrarUltimoRecibido(envelope) {
+  const cont = document.getElementById("ultimoRecibido");
+  const p = envelope.payload;
+
+  let detalleHtml = "";
+  if (envelope.tipo === "INV") {
+    const prods = productosDeEnvelopeINV(envelope);
+    detalleHtml = prods.length === 0
+      ? `<p class="hint" style="margin:8px 0 0 0;">Este paquete no trae productos.</p>`
+      : prods.map((u) => `
+          <div class="inv-item">
+            <div class="inv-item-info">
+              ${u.id_sniim ? `<span class="badge INV">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>
+              <div class="kv" style="margin-top:4px;">
+                <b>Cantidad:</b> ${u.cantidad_kg} kg<br>
+                <b>Calidad:</b> ${u.calidad ? u.calidad : "<span class=\"muted\">(sin especificar)</span>"}<br>
+                <b>Precio:</b> ${u.precio_referencia_mxn_kg} MXN/kg<br>
+                <b>Disponible desde:</b> ${u.disponible_desde}
+              </div>
+            </div>
+          </div>`).join("");
+  } else if (envelope.tipo === "OC") {
+    const prods = productosDeEnvelopeOC(envelope);
+    const total = envelope.payload.total_mxn ?? prods.reduce((a, x) => a + (x.subtotal_mxn || 0), 0);
+    detalleHtml = `
+      ${prods.map((u) => `
+        <div class="inv-item">
+          <div class="inv-item-info">
+            ${u.id_sniim ? `<span class="badge OC">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>
+            <div class="kv" style="margin-top:4px;">
+              <b>Cantidad:</b> ${u.cantidad_kg} kg<br>
+              <b>Precio:</b> ${u.precio_mxn_kg} MXN/kg<br>
+              <b>Subtotal:</b> ${u.subtotal_mxn} MXN
+            </div>
+          </div>
+        </div>`).join("")}
+      <div class="kv" style="margin-top:8px;">
+        <b>Total:</b> ${total} MXN<br>
+        <b>Comprador:</b> ${p.comprador_id}<br>
+        <b>Referencia al inventario:</b> ${p.id_inventario_ref ? p.id_inventario_ref : "<span class=\"muted\">(orden armada a mano, sin referencia a un QR-INV puntual)</span>"}
+      </div>`;
+  } else if (envelope.tipo === "CE") {
+    const prods = productosDeEnvelopeCE(envelope);
+    detalleHtml = `
+      ${prods.map((u) => `
+        <div class="inv-item">
+          <div class="inv-item-info">
+            ${u.id_sniim ? `<span class="badge CE">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>
+            <div class="kv" style="margin-top:4px;"><b>Cantidad recibida:</b> ${u.cantidad_kg} kg</div>
+          </div>
+        </div>`).join("")}
+      <div class="kv" style="margin-top:8px;">
+        <b>Calidad observada:</b> ${p.calidad_observada}<br>
+        <b>Evidencia:</b> ${p.evidencia_hash}<br>
+        <b>Geolocalización:</b> ${p.geolocalizacion}<br>
+        <b>Referencia a la orden:</b> ${p.id_orden_ref}
+      </div>`;
+  } else if (envelope.tipo === "CR") {
+    const prods = productosDeEnvelopeCR(envelope);
+    detalleHtml = `
+      ${prods.map((u) => `
+        <div class="inv-item">
+          <div class="inv-item-info">
+            ${u.id_sniim ? `<span class="badge CR">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>
+            <div class="kv" style="margin-top:4px;"><b>Cantidad a sumar al inventario:</b> ${u.cantidad_kg} kg</div>
+          </div>
+        </div>`).join("")}
+      <div class="kv" style="margin-top:8px;">
+        <b>Calidad observada:</b> ${p.calidad_observada}<br>
+        <b>Evidencia:</b> ${p.evidencia_hash}<br>
+        <b>Geolocalización:</b> ${p.geolocalizacion}<br>
+        <b>Referencia a la confirmación de entrega:</b> ${p.id_ce_ref}
+      </div>`;
+  }
+
+  cont.innerHTML = `
+    <div class="card">
+      <span class="badge ${envelope.tipo}">${envelope.tipo}</span>
+      <div class="kv" style="margin-top:8px;">
+        <b>id_transacción:</b> ${envelope.id_transaccion}<br>
+        <b>Emisor:</b> ${envelope.emisor_id}
+      </div>
+      ${detalleHtml}
+      <details class="raw"><summary>Ver payload completo (JSON)</summary>
+        <pre>${JSON.stringify(envelope.payload, null, 2).replace(/</g, "&lt;")}</pre>
+      </details>
+    </div>`;
+
+  // Si es un inventario y quien está usando el dispositivo tiene rol de
+  // comprador, ofrecer armar una orden de compra ahí mismo, eligiendo
+  // cuánto se necesita de cada producto.
+  if (envelope.tipo === "INV" && estado.miRoles && estado.miRoles.includes("comprador")) {
+    const armador = construirArmadorOrden(envelope);
+    if (armador) cont.appendChild(armador);
+  }
+
+  // Si es una orden de compra y quien está usando el dispositivo tiene
+  // rol de productor, validarla contra el inventario propio y ofrecer
+  // generar la confirmación de entrega con lo que sí coincide.
+  if (envelope.tipo === "OC" && estado.miRoles && estado.miRoles.includes("productor")) {
+    const validacion = construirValidacionOC(envelope);
+    if (validacion) cont.appendChild(validacion);
+  }
+
+  // Si es una confirmación de entrega y quien está usando el dispositivo
+  // tiene rol de comprador, ofrecer generar la confirmación de recepción
+  // — el paso que suma estos productos a SU propio inventario.
+  if (envelope.tipo === "CE" && estado.miRoles && estado.miRoles.includes("comprador")) {
+    const generador = construirGeneracionCR(envelope);
+    if (generador) cont.appendChild(generador);
+  }
+}
+
+// Compara cada producto de una orden de compra contra "Mi inventario
+// guardado": coincidencia = el producto existe y hay cantidad suficiente;
+// diferencia = no está en el inventario, o no alcanza la cantidad pedida.
+function construirValidacionOC(envelope) {
+  const prodsOC = productosDeEnvelopeOC(envelope);
+  if (prodsOC.length === 0) return null;
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  const titulo = document.createElement("h2");
+  titulo.className = "section-title";
+  titulo.style.marginBottom = "6px";
+  titulo.textContent = "Validación contra tu inventario";
+  wrap.appendChild(titulo);
+
+  if (!estado.miActorId) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "0";
+    aviso.textContent = "Para confirmar la entrega necesitás identificarte primero (pestaña Identidad).";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  if (yaTieneCEGenerada(envelope.id_transaccion)) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "0";
+    aviso.textContent = "Ya generaste una confirmación de entrega para esta orden — no se puede generar otra.";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  const coincidencias = [];
+  const diferencias = [];
+  prodsOC.forEach((u) => {
+    const disponible = estado.miInventario.get(u.id_sniim);
+    if (!disponible) {
+      diferencias.push({ producto: u, motivo: "No está en tu inventario guardado." });
+    } else if (disponible.cantidad_kg < u.cantidad_kg) {
+      diferencias.push({ producto: u, motivo: `Cantidad insuficiente: pide ${u.cantidad_kg} kg, tenés ${disponible.cantidad_kg} kg.` });
+    } else {
+      coincidencias.push({ producto: u, disponible });
+    }
+  });
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.style.marginBottom = "10px";
+  hint.textContent = `${coincidencias.length} coincidencia${coincidencias.length === 1 ? "" : "s"} · ${diferencias.length} diferencia${diferencias.length === 1 ? "" : "s"}.`;
+  wrap.appendChild(hint);
+
+  if (coincidencias.length > 0) {
+    const listaOk = document.createElement("div");
+    coincidencias.forEach(({ producto, disponible }) => {
+      const row = document.createElement("div");
+      row.className = "inv-item";
+      row.innerHTML = `
+        <div class="inv-item-info">
+          <span class="badge INV">✓ ${producto.id_sniim}</span> <span class="nombre">${producto.producto}</span>
+          <div class="detalle" style="margin-top:2px;">Pide ${producto.cantidad_kg} kg · tenés ${disponible.cantidad_kg} kg disponibles</div>
+        </div>`;
+      listaOk.appendChild(row);
+    });
+    wrap.appendChild(listaOk);
+  }
+
+  if (diferencias.length > 0) {
+    const listaDif = document.createElement("div");
+    diferencias.forEach(({ producto, motivo }) => {
+      const row = document.createElement("div");
+      row.className = "inv-item";
+      row.innerHTML = `
+        <div class="inv-item-info">
+          <span class="badge CE">✗ ${producto.id_sniim || "?"}</span> <span class="nombre">${producto.producto}</span>
+          <div class="detalle" style="margin-top:2px; color:var(--danger);">${motivo}</div>
+        </div>`;
+      listaDif.appendChild(row);
+    });
+    wrap.appendChild(listaDif);
+  }
+
+  if (coincidencias.length === 0) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "10px 0 0 0";
+    aviso.textContent = "Ningún producto de esta orden coincide con tu inventario — no hay nada que confirmar todavía.";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnrow";
+  const btnGenerarCE = document.createElement("button");
+  btnGenerarCE.type = "button";
+  btnGenerarCE.className = "primary";
+  btnGenerarCE.textContent = `Generar confirmación de entrega (CE) con ${coincidencias.length} coincidencia${coincidencias.length === 1 ? "" : "s"}`;
+  btnRow.appendChild(btnGenerarCE);
+  wrap.appendChild(btnRow);
+
+  const msgCE = document.createElement("div");
+  wrap.appendChild(msgCE);
+
+  btnGenerarCE.addEventListener("click", async () => {
+    if (yaTieneCEGenerada(envelope.id_transaccion)) {
+      msgCE.innerHTML = `<div class="msg err">Ya generaste una confirmación de entrega para esta orden.</div>`;
+      return;
+    }
+    const items = coincidencias.map(({ producto }) => ({ id_sniim: producto.id_sniim, producto: producto.producto, cantidad_kg: producto.cantidad_kg }));
+    const payload = construirPayloadCE(envelope.id_transaccion, items, "Conforme", "", "");
+    msgCE.innerHTML = "";
+    const envelopeCE = await guardarCeSinQr({
+      payload,
+      contenedorMensaje: msgCE,
+      descripcionExtra: `Confirmación de entrega con ${items.length} producto${items.length === 1 ? "" : "s"} que sí coinciden. `,
+    });
+    if (envelopeCE) {
+      // La ponemos directo en la cola local, como pidió el cambio: queda
+      // lista para sincronizar, igual que cualquier paquete recibido.
+      const claveDedupe = envelopeCE.tipo + "|" + envelopeCE.id_transaccion;
+      estado.vistos.add(claveDedupe);
+      estado.noncesConsumidos.add(payload.nonce_uso_unico);
+      estado.colaLocal.push({
+        tipo: envelopeCE.tipo,
+        id_transaccion: envelopeCE.id_transaccion,
+        emisor_id: envelopeCE.emisor_id,
+        envelope: envelopeCE,
+        sincronizado: false,
+        recibidoEn: Date.now(),
+      });
+      actualizarHistorico();
+      guardarEstado();
+      msgCE.innerHTML += `<div class="msg ok">Agregada a tu cola local.</div>`;
+    }
+  });
+
+  return wrap;
+}
+
+// A partir de una CE escaneada, deja editar la cantidad recibida por
+// producto (por si hubo alguna merma respecto a lo que decía la CE) y
+// genera la CR correspondiente — el paso que suma estos productos al
+// inventario propio de quien la genera.
+function construirGeneracionCR(envelope) {
+  const prodsCE = productosDeEnvelopeCE(envelope);
+  if (prodsCE.length === 0) return null;
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  const titulo = document.createElement("h2");
+  titulo.className = "section-title";
+  titulo.style.marginBottom = "6px";
+  titulo.textContent = "Confirmar recepción (suma a tu inventario)";
+  wrap.appendChild(titulo);
+
+  if (!estado.miActorId) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "0";
+    aviso.textContent = "Para confirmar la recepción necesitás identificarte primero (pestaña Identidad).";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  if (yaTieneCRGenerada(envelope.id_transaccion)) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "0";
+    aviso.textContent = "Ya generaste una confirmación de recepción para esta entrega — no se puede generar otra.";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.style.marginBottom = "10px";
+  hint.textContent = "Ajustá la cantidad si recibiste menos de lo que dice la confirmación de entrega, y generá tu confirmación de recepción.";
+  wrap.appendChild(hint);
+
+  const cantidades = {};
+  const lista = document.createElement("div");
+  prodsCE.forEach((u) => {
+    cantidades[u.id_sniim] = u.cantidad_kg;
+    const row = document.createElement("div");
+    row.className = "inv-item";
+    const info = document.createElement("div");
+    info.className = "inv-item-info";
+    info.innerHTML = `<span class="badge CE">${u.id_sniim || "?"}</span> <span class="nombre">${u.producto}</span>
+      <div class="detalle" style="margin-top:2px;">La CE dice ${u.cantidad_kg} kg</div>`;
+    row.appendChild(info);
+
+    const controles = document.createElement("div");
+    controles.style.cssText = "display:flex; align-items:center; gap:8px;";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.max = String(u.cantidad_kg);
+    input.step = "any";
+    input.value = u.cantidad_kg;
+    input.style.width = "80px";
+    const unidad = document.createElement("span");
+    unidad.className = "detalle";
+    unidad.textContent = "kg";
+    controles.appendChild(input);
+    controles.appendChild(unidad);
+    row.appendChild(controles);
+    lista.appendChild(row);
+
+    input.addEventListener("input", () => {
+      let val = parseFloat(input.value);
+      if (isNaN(val) || val < 0) val = 0;
+      if (val > u.cantidad_kg) { val = u.cantidad_kg; input.value = String(val); }
+      cantidades[u.id_sniim] = val;
+    });
+  });
+  wrap.appendChild(lista);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnrow";
+  const btnGenerarCR = document.createElement("button");
+  btnGenerarCR.type = "button";
+  btnGenerarCR.className = "primary";
+  btnGenerarCR.textContent = "Generar confirmación de recepción (CR)";
+  btnRow.appendChild(btnGenerarCR);
+  wrap.appendChild(btnRow);
+
+  const msgCR = document.createElement("div");
+  wrap.appendChild(msgCR);
+
+  btnGenerarCR.addEventListener("click", async () => {
+    if (yaTieneCRGenerada(envelope.id_transaccion)) {
+      msgCR.innerHTML = `<div class="msg err">Ya generaste una confirmación de recepción para esta entrega.</div>`;
+      return;
+    }
+    const items = prodsCE
+      .filter((u) => cantidades[u.id_sniim] > 0)
+      .map((u) => ({ id_sniim: u.id_sniim, producto: u.producto, cantidad_kg: cantidades[u.id_sniim] }));
+    if (items.length === 0) {
+      msgCR.innerHTML = `<div class="msg err">Poné al menos una cantidad mayor a 0 para generar la confirmación.</div>`;
+      return;
+    }
+    const payload = construirPayloadCR(envelope.id_transaccion, items, "Conforme", "", "");
+    msgCR.innerHTML = "";
+    // Igual que la CE: no se dibuja ningún QR acá. La CR queda firmada y
+    // guardada pendiente en el histórico; el paso de "Confirmar y sumar
+    // al inventario" (Panel → CR pendientes) es el único que existe para
+    // esta CR, y ya no genera QR tampoco — no hace falta ninguno.
+    const envelopeCR = await firmarNuevoEnvelope("CR", payload);
+    if (!envelopeCR) {
+      msgCR.innerHTML = `<div class="msg err">Primero definí tu identidad en la pestaña "Identidad".</div>`;
+      return;
+    }
+    const claveDedupe = envelopeCR.tipo + "|" + envelopeCR.id_transaccion;
+    estado.vistos.add(claveDedupe);
+    estado.noncesConsumidos.add(payload.nonce_uso_unico);
+    const item = {
+      tipo: envelopeCR.tipo,
+      id_transaccion: envelopeCR.id_transaccion,
+      emisor_id: envelopeCR.emisor_id,
+      envelope: envelopeCR,
+      sincronizado: false,
+      recibidoEn: Date.now(),
+    };
+    estado.colaLocal.push(item);
+    // A diferencia de la CE (que sí necesita revisarse en Panel antes de
+    // confirmar y descontar), la CR se suma al inventario en el momento
+    // — no hace falta ir al Panel para este paso.
+    const detalles = confirmarCRySumarInventario(item);
+    actualizarHistorico();
+    msgCR.innerHTML = `<div class="msg ok">Confirmación de recepción con ${items.length}
+      producto${items.length === 1 ? "" : "s"} generada y sumada a tu inventario:<br>${detalles.join("<br>")}</div>`;
+    btnGenerarCR.disabled = true;
+    lista.querySelectorAll("input").forEach((el) => { el.disabled = true; });
+  });
+
+  return wrap;
+}
+
+function construirArmadorOrden(envelope) {
+  const prods = productosDeEnvelopeINV(envelope);
+  if (prods.length === 0) return null;
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+
+  const titulo = document.createElement("h2");
+  titulo.className = "section-title";
+  titulo.style.marginBottom = "6px";
+  titulo.textContent = "Armar orden de compra";
+  wrap.appendChild(titulo);
+
+  if (!estado.miActorId) {
+    const aviso = document.createElement("p");
+    aviso.className = "hint";
+    aviso.style.margin = "0";
+    aviso.textContent = "Para armar una orden necesitás identificarte primero (pestaña Identidad).";
+    wrap.appendChild(aviso);
+    return wrap;
+  }
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.style.marginBottom = "10px";
+  hint.textContent = "Elegí cuánto necesitás de cada producto — el subtotal y el total se calculan solos.";
+  wrap.appendChild(hint);
+
+  const cantidades = {}; // id_sniim -> cantidad elegida
+  const subtotalSpans = {}; // id_sniim -> elemento donde se muestra el subtotal
+
+  const lista = document.createElement("div");
+  prods.forEach((u) => {
+    cantidades[u.id_sniim] = 0;
+    const row = document.createElement("div");
+    row.className = "inv-item";
+
+    const info = document.createElement("div");
+    info.className = "inv-item-info";
+    info.style.flex = "1";
+    info.innerHTML = `<span class="badge INV">${u.id_sniim}</span> <span class="nombre">${u.producto}</span>
+      <div class="detalle" style="margin-top:2px;">Disponible: ${u.cantidad_kg} kg · ${u.precio_referencia_mxn_kg} MXN/kg</div>`;
+    row.appendChild(info);
+
+    const controles = document.createElement("div");
+    controles.style.cssText = "display:flex; flex-direction:column; align-items:flex-end; gap:4px;";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.max = String(u.cantidad_kg);
+    input.step = "any";
+    input.placeholder = "0 kg";
+    input.style.width = "92px";
+    const subtotalSpan = document.createElement("div");
+    subtotalSpan.className = "detalle";
+    subtotalSpan.textContent = "0.00 MXN";
+    subtotalSpans[u.id_sniim] = subtotalSpan;
+    controles.appendChild(input);
+    controles.appendChild(subtotalSpan);
+    row.appendChild(controles);
+    lista.appendChild(row);
+
+    input.addEventListener("input", () => {
+      let val = parseFloat(input.value);
+      if (isNaN(val) || val < 0) val = 0;
+      if (val > u.cantidad_kg) { val = u.cantidad_kg; input.value = String(val); }
+      cantidades[u.id_sniim] = val;
+      const sub = Math.round(val * u.precio_referencia_mxn_kg * 100) / 100;
+      subtotalSpan.textContent = `${sub.toFixed(2)} MXN`;
+      actualizarTotalYBoton();
+    });
+  });
+  wrap.appendChild(lista);
+
+  const totalSpan = document.createElement("span");
+  totalSpan.textContent = "0.00";
+  const totalDiv = document.createElement("div");
+  totalDiv.className = "kv";
+  totalDiv.style.marginTop = "12px";
+  totalDiv.appendChild(document.createTextNode(""));
+  totalDiv.innerHTML = "<b>Total seleccionado:</b> ";
+  totalDiv.appendChild(totalSpan);
+  totalDiv.appendChild(document.createTextNode(" MXN"));
+  wrap.appendChild(totalDiv);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnrow";
+  const btnGenerarOC = document.createElement("button");
+  btnGenerarOC.type = "button";
+  btnGenerarOC.className = "primary";
+  btnGenerarOC.textContent = "Generar orden de compra (OC)";
+  btnGenerarOC.disabled = true;
+  btnRow.appendChild(btnGenerarOC);
+  wrap.appendChild(btnRow);
+
+  const msgOC = document.createElement("div");
+  wrap.appendChild(msgOC);
+  const resultadoOC = document.createElement("div");
+  wrap.appendChild(resultadoOC);
+
+  function actualizarTotalYBoton() {
+    const total = prods.reduce((acc, u) => acc + cantidades[u.id_sniim] * u.precio_referencia_mxn_kg, 0);
+    totalSpan.textContent = (Math.round(total * 100) / 100).toFixed(2);
+    const hayCantidad = prods.some((u) => cantidades[u.id_sniim] > 0);
+    btnGenerarOC.disabled = !hayCantidad;
+  }
+
+  btnGenerarOC.addEventListener("click", async () => {
+    const items = prods
+      .filter((u) => cantidades[u.id_sniim] > 0)
+      .map((u) => ({ id_sniim: u.id_sniim, producto: u.producto, cantidad_kg: cantidades[u.id_sniim], precio_mxn_kg: u.precio_referencia_mxn_kg }));
+    const payload = construirPayloadOC(envelope.id_transaccion, items, estado.miActorId);
+    msgOC.innerHTML = ""; resultadoOC.innerHTML = "";
+    await generarPaqueteQr({
+      tipo: "OC",
+      payload,
+      contenedorSalida: resultadoOC,
+      contenedorMensaje: msgOC,
+      descripcionExtra: `Orden de compra con ${items.length} producto${items.length === 1 ? "" : "s"}. `,
+    });
+  });
+
+  return wrap;
+}
+
+document.getElementById("btnLimpiarEscaneo").addEventListener("click", () => {
+  estado.reensamblador.reset();
+  estado.ultimoTextoEscaneado = null;
+  actualizarEstadoFragmentos();
+  document.getElementById("msgEscaneo").innerHTML = "";
+  document.getElementById("ultimoRecibido").innerHTML = ""; // borra también el último paquete mostrado (detalle, validaciones, botones de generar)
+  document.getElementById("inputImagenQr").value = "";
+});
+
+// --- Cámara en vivo (html5-qrcode) ---
+document.getElementById("btnIniciarCamara").addEventListener("click", async () => {
+  const readerDiv = document.getElementById("reader");
+  readerDiv.style.display = "block";
+  const msg = document.getElementById("msgEscaneo");
+  try {
+    estado.camaraActiva = new Html5Qrcode("reader");
+    await estado.camaraActiva.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      (decodedText) => { procesarTextoQr(decodedText); },
+      () => { /* frame sin QR detectado: normal, se ignora */ }
+    );
+    document.getElementById("btnIniciarCamara").disabled = true;
+    document.getElementById("btnDetenerCamara").disabled = false;
+  } catch (e) {
+    msg.innerHTML = `<div class="msg err">No se pudo acceder a la cámara: ${e.message || e}.
+      Revisá permisos del navegador, o usá "Cargar imagen" en su lugar.</div>`;
+    readerDiv.style.display = "none";
+  }
+});
+document.getElementById("btnDetenerCamara").addEventListener("click", async () => {
+  if (estado.camaraActiva) {
+    try { await estado.camaraActiva.stop(); estado.camaraActiva.clear(); } catch (e) {}
+    estado.camaraActiva = null;
+  }
+  document.getElementById("reader").style.display = "none";
+  document.getElementById("btnIniciarCamara").disabled = false;
+  document.getElementById("btnDetenerCamara").disabled = true;
+});
+
+// --- Cargar imagen ---
+// Respaldo para "Cargar imagen": decodifica el archivo con jsQR, dibujando
+// la imagen a resolución natural en un canvas oculto. Se usa solo cuando
+// html5-qrcode ya no pudo — ver comentario en el handler de más abajo.
+function decodificarConJsQR(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const resultado = jsQR(imageData.data, imageData.width, imageData.height);
+        URL.revokeObjectURL(img.src);
+        resolve(resultado ? resultado.data : null);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+document.getElementById("inputImagenQr").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById("msgEscaneo");
+  const tmpId = "reader-file-tmp";
+  let tmpDiv = document.getElementById(tmpId);
+  if (!tmpDiv) {
+    tmpDiv = document.createElement("div");
+    tmpDiv.id = tmpId;
+    tmpDiv.style.display = "none";
+    document.body.appendChild(tmpDiv);
+  }
+  try {
+    const scanner = new Html5Qrcode(tmpId);
+    const texto = await scanner.scanFile(file, false);
+    estado.ultimoTextoEscaneado = null; // forzar reproceso aunque sea igual al último de cámara
+    await procesarTextoQr(texto);
+  } catch (e) {
+    // html5-qrcode (ZXing por dentro) no lo encontró — antes de avisar
+    // que no hay QR, reintentar con jsQR, que en nuestras pruebas rescata
+    // una buena parte de los casos donde ZXing falla (sobre todo QR
+    // densos con ciertos contenidos, algo verificado directamente y no
+    // solo supuesto).
+    try {
+      const texto = await decodificarConJsQR(file);
+      if (!texto) throw new Error("jsQR tampoco encontró nada");
+      estado.ultimoTextoEscaneado = null;
+      await procesarTextoQr(texto);
+    } catch (e2) {
+      msg.innerHTML = `<div class="msg err">No se detectó ningún QR en la imagen cargada.</div>`;
+    }
+  } finally {
+    ev.target.value = "";
+  }
+});
+
+/* =====================================================================
+   TAB: COLA / SINCRONIZACIÓN
+===================================================================== */
+function actualizarHistorico() {
+  const cont = document.getElementById("listaHistorico");
+  const items = [...estado.colaLocal].sort((a, b) => b.recibidoEn - a.recibidoEn);
+
+  if (items.length === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Todavía no hay nada en el histórico.</p>`;
+  } else {
+    cont.innerHTML = "";
+    items.forEach((item) => {
+      cont.appendChild(construirFilaHistorico(item));
+    });
+  }
+
+  const total = estado.colaLocal.length;
+  const pendientes = estado.colaLocal.filter((i) => !i.sincronizado).length;
+  document.getElementById("resumenHistorico").innerHTML =
+    `<b>${total}</b> paquete(s) en el histórico` +
+    (pendientes > 0
+      ? ` · <b>${pendientes}</b> a la espera de la próxima sincronización automática.`
+      : ` · todo sincronizado.`) +
+    (estado.ultimaSincronizacion
+      ? `<br><span class="muted">Última sincronización: ${new Date(estado.ultimaSincronizacion).toLocaleString()}</span>`
+      : "");
+  actualizarPanel(); // el histórico alimenta "OC pendientes" y "CE pendientes" del Panel
+}
+
+// Una tarjeta por paquete del histórico: resumen, estado de sync, botón
+// para volver a mostrar su QR (sin re-firmar — es el mismo paquete tal
+// cual quedó guardado) y botón para eliminarlo del histórico.
+function construirFilaHistorico(item) {
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+
+  const cabecera = document.createElement("div");
+  cabecera.className = "inv-item";
+  cabecera.style.borderBottom = "none";
+  cabecera.innerHTML = `
+    <div class="inv-item-info">
+      <span class="badge ${item.tipo}">${item.tipo}</span> <span class="nombre">${etiquetaPayload(item.envelope)}</span><br>
+      <span class="detalle">${item.id_transaccion} · emisor ${item.emisor_id} ·
+        ${new Date(item.recibidoEn).toLocaleString()} ·
+        ${item.sincronizado ? '<span class="status-dot sync"></span>sincronizado' : '<span class="status-dot pend"></span>pendiente'}${
+          item.tipo === "CE" ? (item.confirmadaInventario ? " · confirmada" : " · <b>sin confirmar todavía</b> (Panel → CE pendientes)") : ""
+        }</span>
+    </div>
+    <div class="inv-item-acciones">
+      ${(item.tipo === "CE" && estado.miActorId && item.emisor_id === estado.miActorId && item.confirmadaInventario) ? '<button type="button" class="secondary small" data-accion="qr">Generar QR</button>' : ""}
+      <button type="button" class="danger small" data-accion="eliminar">Eliminar</button>
+    </div>`;
+  wrap.appendChild(cabecera);
+
+  const areaQr = document.createElement("div");
+  areaQr.style.display = "none";
+  wrap.appendChild(areaQr);
+
+  const btnQr = cabecera.querySelector('[data-accion="qr"]');
+  if (btnQr) btnQr.addEventListener("click", (ev) => {
+    const btn = ev.currentTarget;
+    const yaAbierto = areaQr.style.display !== "none";
+    if (yaAbierto) {
+      areaQr.style.display = "none";
+      btn.textContent = "Generar QR";
+      return;
+    }
+    if (!areaQr.dataset.dibujado) {
+      const msgArea = document.createElement("div");
+      const qrArea = document.createElement("div");
+      areaQr.appendChild(msgArea);
+      areaQr.appendChild(qrArea);
+      renderizarQrDeEnvelope(item.envelope, qrArea, msgArea, "");
+      areaQr.dataset.dibujado = "1";
+    }
+    areaQr.style.display = "block";
+    btn.textContent = "Ocultar QR";
+  });
+
+  cabecera.querySelector('[data-accion="eliminar"]').addEventListener("click", () => {
+    const idx = estado.colaLocal.indexOf(item);
+    if (idx !== -1) estado.colaLocal.splice(idx, 1);
+    estado.vistos.delete(item.tipo + "|" + item.id_transaccion);
+    if (item.tipo === "CE" && item.envelope.payload && item.envelope.payload.nonce_uso_unico) {
+      estado.noncesConsumidos.delete(item.envelope.payload.nonce_uso_unico);
+    }
+    guardarEstado();
+    actualizarHistorico();
+  });
+
+  return wrap;
+}
+
+/* =====================================================================
+   PANEL — inventario, OC pendientes de CE, CE pendientes de confirmar
+===================================================================== */
+
+// Una OC está "pendiente" si en la cola local todavía no hay ninguna CE
+// que la referencie (payload.id_orden_ref === id_transaccion de la OC).
+function ocsPendientesDeCE() {
+  const idsConCE = new Set(
+    estado.colaLocal.filter((it) => it.tipo === "CE").map((it) => it.envelope.payload.id_orden_ref)
+  );
+  return estado.colaLocal.filter((it) => it.tipo === "OC" && !idsConCE.has(it.id_transaccion));
+}
+
+// Una CE está "pendiente" si todavía no se aplicó el descuento a "Mi
+// inventario guardado" (bandera confirmadaInventario).
+function cesPendientesDeConfirmar() {
+  return estado.colaLocal.filter((it) => it.tipo === "CE" && !it.confirmadaInventario);
+}
+
+// Una CR está "pendiente" si todavía no se sumó a "Mi inventario
+// guardado" (misma bandera confirmadaInventario, reutilizada).
+function crsPendientesDeConfirmar() {
+  return estado.colaLocal.filter((it) => it.tipo === "CR" && !it.confirmadaInventario);
+}
+
+function actualizarPanelBadge() {
+  const pendOC = ocsPendientesDeCE().length;
+  const pendCE = cesPendientesDeConfirmar().length;
+  const pendCR = crsPendientesDeConfirmar().length;
+  const badge = document.getElementById("panelBadgeNum");
+  if (badge) {
+    const total = pendOC + pendCE + pendCR;
+    badge.textContent = total > 0 ? `(${total})` : "";
+  }
+}
+
+function actualizarPanel() {
+  actualizarPanelBadge();
+  // Solo renderizar el contenido si la pestaña Panel ya existe en el DOM
+  // (siempre existe, se arma una vez al cargar la página).
+  actualizarPanelInventario();
+  actualizarPanelOC();
+  actualizarPanelCE();
+  actualizarPanelCR();
+}
+
+function actualizarPanelInventario() {
+  const cont = document.getElementById("subtabPanelInventario");
+  if (!cont) return;
+  if (estado.miInventario.size === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Todavía no tenés productos guardados en tu
+      inventario. Se cargan desde la pestaña Generar (tipo INV).</p>`;
+    return;
+  }
+  cont.innerHTML = `<div class="btnrow" style="margin-top:0;"><button type="button" class="ghost small btn-compartir-inventario">📤 Compartir inventario</button></div>` +
+    [...estado.miInventario.values()]
+    .sort((a, b) => a.producto.localeCompare(b.producto))
+    .map((item) => `
+      <div class="inv-item">
+        <div class="inv-item-info">
+          <span class="badge INV">${item.id_sniim}</span> <span class="nombre">${item.producto}</span><br>
+          <span class="detalle">${item.cantidad_kg} kg${item.calidad ? " · " + item.calidad : ""} ·
+            ${item.precio_referencia_mxn_kg} MXN/kg · actualizado ${new Date(item.actualizadoEn).toLocaleString()}</span>
+        </div>
+      </div>`)
+    .join("");
+}
+
+function actualizarPanelOC() {
+  const cont = document.getElementById("subtabPanelOC");
+  if (!cont) return;
+  const pendientes = ocsPendientesDeCE();
+
+  if (!estado.miActorId || !estado.miRoles || !estado.miRoles.includes("productor")) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Esta vista es para el rol <b>productor</b> —
+      identificate con ese rol activo (pestaña Identidad) para validar órdenes contra tu inventario.</p>`;
+    return;
+  }
+  if (pendientes.length === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">No hay órdenes de compra pendientes de
+      confirmación de entrega — todas las que tenés en la cola ya generaron su CE.</p>`;
+    return;
+  }
+  cont.innerHTML = "";
+  pendientes
+    .slice()
+    .reverse()
+    .forEach((item) => {
+      const cabecera = document.createElement("div");
+      cabecera.className = "kv";
+      cabecera.style.cssText = "margin-bottom:6px;";
+      cabecera.innerHTML = `<span class="badge OC">${item.id_transaccion}</span>
+        de <b>${item.emisor_id}</b> · recibida ${new Date(item.recibidoEn).toLocaleString()}`;
+      cont.appendChild(cabecera);
+      const validacion = construirValidacionOC(item.envelope);
+      if (validacion) cont.appendChild(validacion);
+    });
+}
+
+function actualizarPanelCE() {
+  const cont = document.getElementById("subtabPanelCE");
+  if (!cont) return;
+  const pendientes = cesPendientesDeConfirmar();
+
+  if (!estado.miActorId || !estado.miRoles || !estado.miRoles.includes("productor")) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Esta vista es para el rol <b>productor</b> —
+      identificate con ese rol activo (pestaña Identidad) para confirmar entregas y descontar tu
+      inventario.</p>`;
+    return;
+  }
+  if (pendientes.length === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">No hay confirmaciones de entrega pendientes
+      de aplicar a tu inventario.</p>`;
+    return;
+  }
+  cont.innerHTML = "";
+  pendientes
+    .slice()
+    .reverse()
+    .forEach((item) => {
+      cont.appendChild(construirTarjetaCEPendiente(item));
+    });
+}
+
+// Una tarjeta por CE pendiente: líneas editables (cantidad) y eliminables,
+// re-firmando el envelope local cada vez que se toca algo, y el botón de
+// confirmar que descuenta inventario y muestra el QR final.
+function construirTarjetaCEPendiente(item) {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const cabecera = document.createElement("div");
+  cabecera.innerHTML = `
+    <span class="badge CE">${item.id_transaccion}</span>
+    <div class="kv" style="margin-top:6px;">
+      <b>Emisor:</b> ${item.emisor_id}<br>
+      <b>Orden referenciada:</b> ${item.envelope.payload.id_orden_ref}<br>
+      <b>Calidad observada:</b> ${item.envelope.payload.calidad_observada || "<span class=\"muted\">(sin especificar)</span>"}
+    </div>`;
+  card.appendChild(cabecera);
+
+  const lista = document.createElement("div");
+  lista.style.marginTop = "8px";
+  card.appendChild(lista);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnrow";
+  const btnConfirmar = document.createElement("button");
+  btnConfirmar.type = "button";
+  btnConfirmar.className = "primary";
+  btnConfirmar.textContent = "Confirmar y descontar del inventario";
+  btnRow.appendChild(btnConfirmar);
+  card.appendChild(btnRow);
+
+  const msgArea = document.createElement("div");
+  card.appendChild(msgArea);
+  const resultadoArea = document.createElement("div");
+  card.appendChild(resultadoArea);
+
+  function renderLineas() {
+    const prods = productosDeEnvelopeCE(item.envelope);
+    lista.innerHTML = "";
+    if (prods.length === 0) {
+      lista.innerHTML = `<p class="hint" style="margin:0;">No quedan productos en esta confirmación.</p>`;
+      btnConfirmar.disabled = true;
+      return;
+    }
+    btnConfirmar.disabled = false;
+    prods.forEach((u) => {
+      const row = document.createElement("div");
+      row.className = "inv-item";
+      const info = document.createElement("div");
+      info.className = "inv-item-info";
+      info.innerHTML = `${u.id_sniim ? `<span class="badge INV">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>`;
+      row.appendChild(info);
+
+      const controles = document.createElement("div");
+      controles.style.cssText = "display:flex; align-items:center; gap:8px;";
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.step = "any";
+      input.value = u.cantidad_kg;
+      input.style.width = "80px";
+      const unidad = document.createElement("span");
+      unidad.className = "detalle";
+      unidad.textContent = "kg";
+      const btnQuitar = document.createElement("button");
+      btnQuitar.type = "button";
+      btnQuitar.className = "danger small";
+      btnQuitar.textContent = "Quitar";
+      controles.appendChild(input);
+      controles.appendChild(unidad);
+      controles.appendChild(btnQuitar);
+      row.appendChild(controles);
+      lista.appendChild(row);
+
+      input.addEventListener("change", async () => {
+        let val = parseFloat(input.value);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val === 0) {
+          // cantidad en 0 equivale a quitar la línea
+          item.envelope.payload.productos = productosDeEnvelopeCE(item.envelope).filter((p) => p.id_sniim !== u.id_sniim);
+        } else {
+          const prodsActuales = productosDeEnvelopeCE(item.envelope);
+          const linea = prodsActuales.find((p) => p.id_sniim === u.id_sniim);
+          if (linea) linea.cantidad_kg = val;
+          item.envelope.payload.productos = prodsActuales;
+        }
+        await refirmarEnvelope(item.envelope);
+        guardarEstado();
+        renderLineas();
+      });
+
+      btnQuitar.addEventListener("click", async () => {
+        item.envelope.payload.productos = productosDeEnvelopeCE(item.envelope).filter((p) => p.id_sniim !== u.id_sniim);
+        await refirmarEnvelope(item.envelope);
+        guardarEstado();
+        renderLineas();
+      });
+    });
+  }
+  renderLineas();
+
+  btnConfirmar.addEventListener("click", () => {
+    const detalles = confirmarCEyDescontarInventario(item);
+    msgArea.innerHTML = `<div class="msg ok">Inventario actualizado:<br>${detalles.join("<br>")}</div>`;
+    resultadoArea.innerHTML = "";
+    // Corrección solicitada: al confirmar, también se genera el QR final
+    // (con las cantidades/líneas ya corregidas, si se editó algo).
+    renderizarQrDeEnvelope(item.envelope, resultadoArea, msgArea, "QR de la confirmación de entrega, ya aplicada a tu inventario. ");
+    btnConfirmar.disabled = true;
+    lista.querySelectorAll("input, button.danger").forEach((el) => { el.disabled = true; });
+  });
+
+  return card;
+}
+
+// Descuenta las cantidades de una CE de "Mi inventario guardado" y marca
+// esa entrada de la cola local como confirmada. Devuelve una lista de
+// líneas describiendo qué se descontó, para mostrar como confirmación.
+function confirmarCEyDescontarInventario(item) {
+  const prods = productosDeEnvelopeCE(item.envelope);
+  const detalles = [];
+  prods.forEach((u) => {
+    const inv = estado.miInventario.get(u.id_sniim);
+    if (inv) {
+      const anterior = inv.cantidad_kg;
+      const nuevo = Math.max(0, Math.round((anterior - u.cantidad_kg) * 100) / 100);
+      inv.cantidad_kg = nuevo;
+      inv.actualizadoEn = Date.now();
+      estado.miInventario.set(u.id_sniim, inv);
+      detalles.push(`${u.producto}: ${anterior} → ${nuevo} kg`);
+    } else {
+      detalles.push(`${u.producto}: no estaba en tu inventario — no se descontó nada.`);
+    }
+  });
+  item.confirmadaInventario = true;
+  item.confirmadaEn = Date.now();
+  guardarEstado();
+  actualizarMiInventarioUI();
+  // Ojo: NO llamamos actualizarPanel() acá — reconstruiría la lista de
+  // "CE pendientes" y destruiría la tarjeta actual justo cuando el
+  // usuario necesita ver el QR recién generado. Solo refrescamos lo que
+  // no toca esta tarjeta: el inventario (sub-pestaña) y el contador.
+  actualizarPanelInventario();
+  actualizarPanelBadge();
+  return detalles;
+}
+
+function actualizarPanelCR() {
+  const cont = document.getElementById("subtabPanelCR");
+  if (!cont) return;
+  const pendientes = crsPendientesDeConfirmar();
+
+  if (!estado.miActorId) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">Identificate primero (pestaña Identidad) para
+      confirmar recepciones y sumarlas a tu inventario.</p>`;
+    return;
+  }
+  if (pendientes.length === 0) {
+    cont.innerHTML = `<p class="hint" style="margin:0;">No hay confirmaciones de recepción pendientes
+      de sumar a tu inventario.</p>`;
+    return;
+  }
+  cont.innerHTML = "";
+  pendientes
+    .slice()
+    .reverse()
+    .forEach((item) => {
+      cont.appendChild(construirTarjetaCRPendiente(item));
+    });
+}
+
+// Espejo de construirTarjetaCEPendiente: líneas editables/eliminables,
+// re-firmando el envelope local, y "Confirmar" que SUMA al inventario
+// (creando el producto en "Mi inventario guardado" si todavía no existía)
+// y también genera el QR final.
+function construirTarjetaCRPendiente(item) {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const cabecera = document.createElement("div");
+  cabecera.innerHTML = `
+    <span class="badge CR">${item.id_transaccion}</span>
+    <div class="kv" style="margin-top:6px;">
+      <b>Emisor:</b> ${item.emisor_id}<br>
+      <b>CE referenciada:</b> ${item.envelope.payload.id_ce_ref}<br>
+      <b>Calidad observada:</b> ${item.envelope.payload.calidad_observada || "<span class=\"muted\">(sin especificar)</span>"}
+    </div>`;
+  card.appendChild(cabecera);
+
+  const lista = document.createElement("div");
+  lista.style.marginTop = "8px";
+  card.appendChild(lista);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnrow";
+  const btnConfirmar = document.createElement("button");
+  btnConfirmar.type = "button";
+  btnConfirmar.className = "primary";
+  btnConfirmar.textContent = "Confirmar y sumar al inventario";
+  btnRow.appendChild(btnConfirmar);
+  card.appendChild(btnRow);
+
+  const msgArea = document.createElement("div");
+  card.appendChild(msgArea);
+
+  function renderLineas() {
+    const prods = productosDeEnvelopeCR(item.envelope);
+    lista.innerHTML = "";
+    if (prods.length === 0) {
+      lista.innerHTML = `<p class="hint" style="margin:0;">No quedan productos en esta confirmación.</p>`;
+      btnConfirmar.disabled = true;
+      return;
+    }
+    btnConfirmar.disabled = false;
+    prods.forEach((u) => {
+      const row = document.createElement("div");
+      row.className = "inv-item";
+      const info = document.createElement("div");
+      info.className = "inv-item-info";
+      info.innerHTML = `${u.id_sniim ? `<span class="badge CR">${u.id_sniim}</span> ` : ""}<span class="nombre">${u.producto}</span>`;
+      row.appendChild(info);
+
+      const controles = document.createElement("div");
+      controles.style.cssText = "display:flex; align-items:center; gap:8px;";
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.step = "any";
+      input.value = u.cantidad_kg;
+      input.style.width = "80px";
+      const unidad = document.createElement("span");
+      unidad.className = "detalle";
+      unidad.textContent = "kg";
+      const btnQuitar = document.createElement("button");
+      btnQuitar.type = "button";
+      btnQuitar.className = "danger small";
+      btnQuitar.textContent = "Quitar";
+      controles.appendChild(input);
+      controles.appendChild(unidad);
+      controles.appendChild(btnQuitar);
+      row.appendChild(controles);
+      lista.appendChild(row);
+
+      input.addEventListener("change", async () => {
+        let val = parseFloat(input.value);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val === 0) {
+          item.envelope.payload.productos = productosDeEnvelopeCR(item.envelope).filter((p) => p.id_sniim !== u.id_sniim);
+        } else {
+          const prodsActuales = productosDeEnvelopeCR(item.envelope);
+          const linea = prodsActuales.find((p) => p.id_sniim === u.id_sniim);
+          if (linea) linea.cantidad_kg = val;
+          item.envelope.payload.productos = prodsActuales;
+        }
+        await refirmarEnvelope(item.envelope);
+        guardarEstado();
+        renderLineas();
+      });
+
+      btnQuitar.addEventListener("click", async () => {
+        item.envelope.payload.productos = productosDeEnvelopeCR(item.envelope).filter((p) => p.id_sniim !== u.id_sniim);
+        await refirmarEnvelope(item.envelope);
+        guardarEstado();
+        renderLineas();
+      });
+    });
+  }
+  renderLineas();
+
+  btnConfirmar.addEventListener("click", () => {
+    const detalles = confirmarCRySumarInventario(item);
+    msgArea.innerHTML = `<div class="msg ok">Inventario actualizado:<br>${detalles.join("<br>")}</div>`;
+    btnConfirmar.disabled = true;
+    lista.querySelectorAll("input, button.danger").forEach((el) => { el.disabled = true; });
+  });
+
+  return card;
+}
+
+// Suma las cantidades de una CR a "Mi inventario guardado" — si el
+// producto todavía no existía ahí, lo crea (con calidad y precio en
+// blanco/0, a completar después desde Generar). Marca la CR como
+// confirmada. Devuelve una lista de líneas describiendo qué se sumó.
+function confirmarCRySumarInventario(item) {
+  const prods = productosDeEnvelopeCR(item.envelope);
+  const detalles = [];
+  prods.forEach((u) => {
+    const inv = estado.miInventario.get(u.id_sniim);
+    if (inv) {
+      const anterior = inv.cantidad_kg;
+      const nuevo = Math.round((anterior + u.cantidad_kg) * 100) / 100;
+      inv.cantidad_kg = nuevo;
+      inv.actualizadoEn = Date.now();
+      estado.miInventario.set(u.id_sniim, inv);
+      detalles.push(`${u.producto}: ${anterior} → ${nuevo} kg`);
+    } else {
+      estado.miInventario.set(u.id_sniim, {
+        id_sniim: u.id_sniim,
+        producto: u.producto,
+        cantidad_kg: u.cantidad_kg,
+        calidad: "",
+        precio_referencia_mxn_kg: 0,
+        disponible_desde: fechaHoyISO(),
+        actualizadoEn: Date.now(),
+      });
+      detalles.push(`${u.producto}: nuevo en tu inventario, ${u.cantidad_kg} kg (completá calidad y precio desde Generar).`);
+    }
+  });
+  item.confirmadaInventario = true;
+  item.confirmadaEn = Date.now();
+  guardarEstado();
+  actualizarMiInventarioUI();
+  actualizarPanelInventario();
+  actualizarPanelBadge();
+  return detalles;
+}
+
+// Sincronización automática (reemplaza el botón manual): se corre al
+// abrir la app y al cerrarla. "Sincronizar" acá sigue siendo una
+// simulación — marca lo pendiente como sincronizado y actualiza la
+// marca de tiempo — pero ya no depende de que el usuario toque nada.
+function sincronizarAutomaticamente() {
+  const pendientes = estado.colaLocal.filter((i) => !i.sincronizado);
+  pendientes.forEach((i) => { i.sincronizado = true; });
+  estado.ultimaSincronizacion = Date.now();
+  guardarEstado();
+  return pendientes.length;
+}
+
+document.getElementById("btnVaciarHistorico").addEventListener("click", () => {
+  if (!confirm("¿Vaciar todo el histórico de este dispositivo? No se puede deshacer.")) return;
+  estado.colaLocal = [];
+  estado.vistos.clear();
+  estado.noncesConsumidos.clear();
+  actualizarHistorico();
+  guardarEstado();
+  document.getElementById("msgHistorico").innerHTML = "";
+});
+
+// Restaurar la identidad (perfil + resumen de inventario) si había una
+// guardada en este dispositivo — sobrevive a recargar la página o cerrar
+// el navegador.
+function restaurarUIDesdeEstado() {
+  if (estado.miActorId && estado.perfiles.has(estado.miActorId)) {
+    const perfil = estado.perfiles.get(estado.miActorId);
+    document.getElementById("miActorId").value = estado.miActorId;
+    document.getElementById("nombrePersona").value = perfil.nombre;
+    document.getElementById("ciudadPersona").value = perfil.ciudad;
+    marcarRolesEnFormulario(perfil.roles || []);
+    document.getElementById("cardIdentidadActual").style.display = "block";
+    document.getElementById("idActualTexto").textContent = estado.miActorId;
+    document.getElementById("nombreActualTexto").textContent = perfil.nombre;
+    document.getElementById("ciudadActualTexto").textContent = perfil.ciudad;
+    document.getElementById("rolActualTexto").textContent =
+      (perfil.roles || []).map((r) => ETIQUETA_ROL[r] || r).join(", ");
+    document.getElementById("msgIdentidad").innerHTML =
+      `<div class="msg ok">Sesión restaurada: seguís como <b>${perfil.nombre}</b> (${estado.miActorId}).</div>`;
+    actualizarResumenInventarioIdentidad();
+  }
+  actualizarVisibilidadBotonModificarId();
+}
+
+mostrarEstadoPersistencia();
+restaurarUIDesdeEstado();
+sincronizarAutomaticamente(); // sincronización al abrir la app
+actualizarHistorico();
+
+// Sincronización al cerrar la app / salir de la pestaña. "pagehide" es
+// más confiable que "beforeunload" en navegadores móviles (Safari en
+// particular puede no disparar beforeunload al cerrar una pestaña).
+window.addEventListener("pagehide", sincronizarAutomaticamente);
+window.addEventListener("beforeunload", sincronizarAutomaticamente);
+</script>
+</body>
+</html>
