@@ -3622,6 +3622,19 @@ actualizarHistorico();
 // particular puede no disparar beforeunload al cerrar una pestaña).
 window.addEventListener("pagehide", sincronizarAutomaticamente);
 window.addEventListener("beforeunload", sincronizarAutomaticamente);
+
+// Registra el Service Worker que guarda la app y sus librerías la primera
+// vez que se abre con internet, para que después ande igual en modo avión
+// o sin señal — requiere HTTPS (o localhost); no hace nada si se abre el
+// archivo directo desde la compu (file://), donde los Service Worker no
+// están disponibles.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      console.warn("No se pudo registrar el Service Worker (modo avión no va a funcionar):", err);
+    });
+  });
+}
 </script>
 </body>
 </html>
